@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "files": [
+    {
+      "files": ["2026-08-27-001.png", "2026-08-27-002.png", "2026-08-27-003.png", "2026-08-27-004.png"],
+      "tags": ["tag 1", "tag 2"],
+      "youtubes": ["https://youtu.be/xxxx"],
+      "news": "2026-08-24.png"
+    },
+    {
+      "files": ["2026-09-01-001.png", "2026-09-01-002.png"],
+      "tags": ["tag x", "tag y"],
+      "youtubes": ["https://youtu.be/xxxx"],
+      "news": "2026-09-01.png"
+    }
+  ]
+}

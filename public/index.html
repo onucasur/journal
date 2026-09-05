@@ -1,0 +1,1947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Archive Viewer</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/awesomplete@1.1.7/awesomplete.css">
+<style>
+  :root{
+    --bg:        #0c0d0f;
+    --panel:     #16181b;
+    --panel-2:   #1c1f23;
+    --line:      #2a2d32;
+    --text:      #e9e6df;
+    --text-dim:  #8d9096;
+    --accent:    #c99a4b;
+    --accent-dim:#5e4a26;
+    --danger:    #c96b4b;
+    --news:      #5b8cc9;
+    --video:     #c95b8c;
+    --serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);}
+  ::selection{background:var(--accent-dim);color:var(--text);}
+
+  #loadError{
+    display:none;max-width:480px;margin:80px auto;padding:24px;background:var(--panel);
+    border:1px solid var(--danger);border-radius:5px;text-align:center;color:var(--text-dim);
+  }
+  #loadError .big{font-family:var(--serif);font-size:1.2rem;color:var(--text);margin-bottom:10px;}
+  #loadError code{background:var(--panel-2);padding:2px 6px;border-radius:3px;color:var(--accent);}
+
+  #archive{display:none;min-height:100vh;flex-direction:column;}
+  header{
+    position:sticky;top:0;z-index:5;background:rgba(12,13,15,0.92);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);padding:18px 26px;display:flex;flex-direction:column;gap:14px;
+  }
+  .header-top{display:flex;align-items:center;flex-wrap:wrap;gap:14px;}
+  .header-top h1{font-family:var(--serif);font-weight:400;font-size:1.5rem;margin:0;color:var(--text);flex-shrink:0;}
+  .header-top .right{display:flex;align-items:center;gap:14px;flex-shrink:0;}
+  .header-top .count{font-family:var(--mono);font-size:0.78rem;color:var(--text-dim);white-space:nowrap;}
+  .search-inline{display:flex;gap:10px;align-items:center;flex:1;min-width:220px;}
+  .rescan-btn{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text-dim);
+    padding:6px 12px;border-radius:20px;font-family:var(--mono);font-size:0.72rem;cursor:pointer;
+    display:flex;align-items:center;gap:6px;transition:border-color .15s,color .15s;
+  }
+  .rescan-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent);}
+  .rescan-btn:disabled{opacity:0.5;cursor:default;}
+  .rescan-btn.active-view{background:var(--accent-dim);color:var(--accent);border-color:var(--accent);}
+  .rescan-btn svg{width:12px;height:12px;}
+  .rescan-btn.spinning svg{animation:spin 0.8s linear infinite;}
+  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+
+  #tagInput{
+    flex:1;min-width:160px;background:var(--panel);border:1px solid var(--line);color:var(--text);
+    padding:9px 12px;border-radius:3px;font-size:0.9rem;font-family:var(--sans);
+  }
+  #tagInput:focus{outline:none;border-color:var(--accent);}
+  .mode-toggle{display:flex;border:1px solid var(--line);border-radius:3px;overflow:hidden;font-family:var(--mono);font-size:0.75rem;flex-shrink:0;}
+  .mode-toggle button{background:var(--panel);color:var(--text-dim);border:none;padding:9px 14px;cursor:pointer;}
+  .mode-toggle button.active{background:var(--accent-dim);color:var(--accent);}
+
+  .chips{display:flex;flex-wrap:wrap;gap:7px;min-height:0;}
+  .chip{
+    display:flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:20px;padding:5px 10px 5px 12px;font-family:var(--mono);font-size:0.75rem;color:var(--text);
+  }
+  .chip button{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:0.9rem;line-height:1;padding:0;}
+  .chip button:hover{color:var(--danger);}
+
+  .tag-suggestions{display:flex;flex-wrap:wrap;gap:6px;}
+  .tag-suggestion{
+    display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:20px;
+    overflow:hidden;transition:border-color .15s;
+  }
+  .tag-suggestion:hover{border-color:var(--accent);}
+  .tag-suggestion .tag-add{
+    background:transparent;border:none;color:var(--text-dim);
+    padding:4px 6px 4px 12px;font-family:var(--mono);font-size:0.72rem;cursor:pointer;
+    transition:color .15s;
+  }
+  .tag-suggestion .tag-add:hover{color:var(--accent);}
+  .tag-suggestion .tag-delete{
+    background:transparent;border:none;border-left:1px solid var(--line);color:var(--text-dim);
+    padding:4px 10px;font-size:0.85rem;line-height:1;cursor:pointer;transition:color .15s;
+  }
+  .tag-suggestion .tag-delete:hover{color:var(--danger);}
+
+  main{flex:1;padding:26px;display:flex;gap:20px;align-items:flex-start;}
+  #results{flex:1;min-width:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px;}
+  .notes-panel{
+    width:560px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;
+    background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:14px;
+    max-height:calc(100vh - 180px);position:sticky;top:20px;
+  }
+  .notes-header{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .notes-header h3{margin:0;font-family:var(--sans);font-size:0.95rem;color:var(--text);}
+  .notes-tabs{display:flex;gap:4px;}
+  .notes-tabs button{
+    background:transparent;border:1px solid var(--line);border-radius:4px;color:var(--text-dim);
+    padding:3px 10px;font-family:var(--sans);font-size:0.75rem;cursor:pointer;transition:all .15s;
+  }
+  .notes-tabs button.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+  .notes-tabs button:hover:not(.active){border-color:var(--text-dim);color:var(--text);}
+  .notes-toolbar{display:flex;flex-wrap:wrap;gap:4px;}
+  .notes-toolbar button{
+    background:transparent;border:1px solid var(--line);border-radius:4px;color:var(--text-dim);
+    padding:4px 8px;font-family:var(--sans);font-size:0.8rem;line-height:1;cursor:pointer;transition:all .15s;
+  }
+  .notes-toolbar button:hover{border-color:var(--text-dim);color:var(--text);}
+  .notes-toolbar .toolbar-sep{width:1px;background:var(--line);margin:0 4px;}
+  .notes-panel textarea{
+    flex:1;min-height:300px;background:transparent;border:1px solid var(--line);border-radius:4px;
+    color:var(--text);padding:10px;font-family:var(--mono);font-size:0.85rem;resize:vertical;
+  }
+  .notes-panel textarea:focus{outline:none;border-color:var(--accent);}
+  .notes-preview{
+    flex:1;min-height:300px;overflow:auto;background:rgba(0,0,0,0.2);border:1px solid var(--line);border-radius:4px;
+    padding:12px;color:var(--text);font-family:var(--sans);font-size:0.9rem;line-height:1.5;
+  }
+  .notes-preview h1, .notes-preview h2, .notes-preview h3, .notes-preview h4{margin:0.8em 0 0.4em;color:var(--text);}
+  .notes-preview p{margin:0.5em 0;}
+  .notes-preview ul, .notes-preview ol{margin:0.5em 0;padding-left:1.5em;}
+  .notes-preview code{background:rgba(255,255,255,0.1);padding:2px 5px;border-radius:3px;font-family:var(--mono);font-size:0.85rem;}
+  .notes-preview pre{background:rgba(0,0,0,0.4);border:1px solid var(--line);border-radius:4px;padding:10px;overflow:auto;}
+  .notes-preview pre code{background:transparent;padding:0;}
+  .notes-preview blockquote{border-left:3px solid var(--accent);margin:0.5em 0;padding-left:12px;color:var(--text-dim);}
+  .notes-preview a{color:var(--accent);}
+  .notes-preview hr{border:none;border-top:1px solid var(--line);margin:1em 0;}
+  .notes-status{font-family:var(--mono);font-size:0.7rem;color:var(--text-dim);min-height:1.2em;text-align:right;}
+  @media (max-width:900px){.notes-panel{display:none;}}
+  .group-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:5px;overflow:hidden;cursor:pointer;
+    transition:border-color .15s,transform .15s;display:flex;flex-direction:column;
+  }
+  .group-card:hover{border-color:var(--accent);transform:translateY(-2px);}
+  .thumb-wrap{position:relative;aspect-ratio:16/10;background:#050506;overflow:hidden;}
+  .thumb-wrap img{width:100%;height:100%;object-fit:cover;display:block;}
+  .thumb-count{
+    position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.65);color:var(--text);
+    font-family:var(--mono);font-size:0.72rem;padding:2px 8px;border-radius:20px;
+  }
+  .card-actions{
+    position:absolute;top:8px;right:8px;display:flex;gap:4px;opacity:0;transition:opacity .15s;
+  }
+  .group-card:hover .card-actions{opacity:1;}
+  .card-actions button{
+    background:rgba(0,0,0,0.65);color:var(--text);border:none;border-radius:4px;
+    width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;
+    font-size:0.85rem;line-height:1;
+  }
+  .card-actions button:hover{background:var(--danger);color:#fff;}
+  .card-actions button.move-up:hover, .card-actions button.move-down:hover{background:var(--accent);color:#1a1305;}
+  .card-drag-handle{
+    position:absolute;top:8px;left:8px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,0.6);border-radius:4px;color:var(--text);cursor:grab;font-size:0.85rem;line-height:1;
+    opacity:0;transition:opacity .15s;
+  }
+  .group-card:hover .card-drag-handle{opacity:1;}
+  .group-card.dragging{opacity:0.4;}
+  .group-card.drop-before{border-top:2px solid var(--accent);}
+  .group-card.drop-after{border-bottom:2px solid var(--accent);}
+  .card-body{padding:12px 14px 14px;display:flex;flex:1;flex-direction:column;gap:8px;}
+  .card-tags{display:flex;flex-wrap:wrap;gap:5px;align-items:center;}
+  .card-meta{font-family:var(--mono);font-size:0.7rem;color:var(--text-dim);display:flex;gap:12px;flex-wrap:wrap;margin-top:auto;padding-top:8px;}
+
+  .empty-state{grid-column:1/-1;text-align:center;padding:80px 20px;color:var(--text-dim);}
+  .empty-state .big{font-family:var(--serif);font-size:1.3rem;color:var(--text);margin-bottom:8px;}
+
+  .ungrouped-bar{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+    margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line);
+    font-family:var(--mono);font-size:0.8rem;color:var(--text-dim);
+  }
+  #createGroupBtn{
+    background:var(--accent);color:#1a1305;border:none;padding:9px 18px;border-radius:3px;
+    font-family:var(--sans);font-size:0.85rem;font-weight:600;cursor:pointer;transition:opacity .15s;
+  }
+  #createGroupBtn:disabled{opacity:0.3;cursor:default;}
+  #createGroupBtn:not(:disabled):hover{opacity:0.88;}
+  .danger-btn{
+    background:var(--danger);color:#1a1305;border:none;padding:9px 18px;border-radius:3px;
+    font-family:var(--sans);font-size:0.85rem;font-weight:600;cursor:pointer;transition:opacity .15s;
+  }
+  .danger-btn:disabled{opacity:0.3;cursor:default;}
+  .danger-btn:not(:disabled):hover{opacity:0.88;}
+  #ungroupedGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:26px;}
+  .ungrouped-card{
+    position:relative;background:var(--panel);border:1px solid var(--line);border-radius:5px;overflow:hidden;
+    cursor:pointer;transition:border-color .15s;
+  }
+  .ungrouped-card.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+  .ungrouped-card .thumb{aspect-ratio:4/3;background:#050506;overflow:hidden;}
+  .ungrouped-card .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .ungrouped-card .fname{
+    font-family:var(--mono);font-size:0.68rem;color:var(--text-dim);padding:6px 8px;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;
+  }
+  .ungrouped-card .checkbox{
+    position:absolute;top:8px;left:8px;width:20px;height:20px;border-radius:4px;
+    border:2px solid rgba(255,255,255,0.6);background:rgba(0,0,0,0.4);
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;
+  }
+  .ungrouped-card.selected .checkbox{background:var(--accent);border-color:var(--accent);color:#1a1305;}
+  .ungrouped-card .quick-add{
+    position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:50%;
+    background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.3);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:0.95rem;cursor:pointer;
+    opacity:0;transition:opacity .15s;
+  }
+  .ungrouped-card:hover .quick-add{opacity:1;}
+  .ungrouped-card .quick-add:hover{background:var(--accent);color:#1a1305;border-color:var(--accent);}
+  .ungrouped-card .delete-btn{
+    position:absolute;top:8px;right:36px;width:24px;height:24px;border-radius:50%;
+    background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.3);color:var(--danger);
+    display:flex;align-items:center;justify-content:center;font-size:0.85rem;cursor:pointer;
+    opacity:0;transition:opacity .15s;
+  }
+  .ungrouped-card:hover .delete-btn{opacity:1;}
+  .delete-btn:hover{background:var(--danger);color:#1a1305;border-color:var(--danger);}
+
+  #viewer{display:none;position:fixed;inset:0;background:#000;z-index:50;flex-direction:column;}
+  .viewer-stage{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+  .viewer-stage img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;user-select:none;-webkit-user-drag:none;}
+  .nav-zone{position:absolute;top:0;bottom:0;width:16%;display:flex;align-items:center;background:transparent;border:none;cursor:pointer;transition:background .15s;}
+  .nav-zone:hover{background:rgba(255,255,255,0.04);}
+  .nav-zone.left{left:0;justify-content:flex-start;padding-left:10px;}
+  .nav-zone.right{right:0;justify-content:flex-end;padding-right:10px;}
+  .nav-zone svg{opacity:0;width:28px;height:28px;transition:opacity .15s;}
+  .nav-zone:hover svg{opacity:0.8;}
+
+  .viewer-topbar{
+    position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;
+    padding:16px 20px;background:linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);z-index:2;pointer-events:none;
+  }
+  .viewer-topbar > *{pointer-events:auto;}
+  .viewer-counter{font-family:var(--mono);font-size:0.8rem;color:rgba(255,255,255,0.85);}
+  .viewer-filename{font-family:var(--mono);font-size:0.78rem;color:rgba(255,255,255,0.55);margin-left:12px;}
+  .viewer-topbar-left{display:flex;align-items:baseline;}
+  .viewer-topbar-right{display:flex;align-items:center;gap:8px;}
+  .close-btn{
+    background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#fff;
+    width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:1rem;line-height:1;
+  }
+  .close-btn:hover{background:rgba(255,255,255,0.18);}
+  .remove-btn{
+    background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:var(--danger);
+    width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:1rem;line-height:1;
+  }
+  .remove-btn:hover{background:rgba(201,107,75,0.25);}
+  .add-btn{
+    background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:var(--accent);
+    width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:1.2rem;line-height:1;
+  }
+  .add-btn:hover{background:rgba(201,154,75,0.25);}
+
+  #addImagePanel{
+    display:none;position:absolute;left:0;right:0;bottom:0;max-height:45%;background:rgba(8,9,10,0.96);
+    border-top:1px solid var(--line);z-index:20;flex-direction:column;padding:14px 20px 18px;
+  }
+  .add-image-header{
+    display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;
+    font-family:var(--mono);font-size:0.8rem;color:var(--text-dim);
+  }
+  .add-image-header button{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:1rem;}
+  .add-image-header button:hover{color:var(--text);}
+  .add-image-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;
+    overflow-y:auto;padding-right:4px;
+  }
+  .add-image-card{
+    position:relative;background:var(--panel);border:1px solid var(--line);border-radius:5px;
+    overflow:hidden;cursor:pointer;transition:border-color .15s;
+  }
+  .add-image-card:hover{border-color:var(--accent);}
+  .add-image-card .thumb{aspect-ratio:4/3;background:#050506;overflow:hidden;}
+  .add-image-card .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .add-image-card .fname{
+    font-family:var(--mono);font-size:0.65rem;color:var(--text-dim);padding:5px 7px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .add-image-card .plus{
+    position:absolute;top:6px;right:6px;width:20px;height:20px;border-radius:50%;
+    background:var(--accent);color:#1a1305;border:none;display:flex;align-items:center;
+    justify-content:center;font-size:0.85rem;font-weight:700;
+  }
+  .add-image-empty{text-align:center;color:var(--text-dim);font-size:0.85rem;padding:20px;}
+
+  .viewer-bottombar{
+    position:absolute;left:0;right:0;bottom:0;padding:16px 20px 20px;z-index:2;
+    background:linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+    display:flex;flex-direction:column;gap:10px;pointer-events:none;
+  }
+  .viewer-bottombar > *{pointer-events:auto;}
+  .thumb-strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;align-items:center;}
+  .thumb-item{position:relative;flex-shrink:0;cursor:pointer;}
+  .thumb-item img{
+    height:52px;width:74px;object-fit:cover;border-radius:3px;cursor:pointer;
+    border:2px solid transparent;opacity:0.55;transition:opacity .15s,border-color .15s;background:#111;display:block;
+  }
+  .thumb-item img.active{opacity:1;border-color:var(--accent);}
+  .thumb-item .thumb-drag-handle{
+    position:absolute;top:2px;left:2px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,0.6);border-radius:3px;color:#fff;font-size:0.75rem;line-height:1;cursor:grab;opacity:0;transition:opacity .15s;
+  }
+  .thumb-item:hover .thumb-drag-handle{opacity:1;}
+  .thumb-item .thumb-move{
+    position:absolute;top:50%;transform:translateY(-50%);width:18px;height:18px;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,0.6);border:none;border-radius:3px;color:#fff;font-size:0.75rem;cursor:pointer;opacity:0;transition:opacity .15s;
+  }
+  .thumb-item:hover .thumb-move{opacity:1;}
+  .thumb-item .thumb-move.left{left:2px;}
+  .thumb-item .thumb-move.right{right:2px;}
+  .thumb-item.dragging{opacity:0.4;}
+  .thumb-item.drop-before::before, .thumb-item.drop-after::after{content:'';position:absolute;top:0;bottom:0;width:2px;background:var(--accent);z-index:2;}
+  .thumb-item.drop-before::before{left:-4px;}
+  .thumb-item.drop-after::after{right:-4px;}
+  .viewer-info{display:flex;flex-direction:column;gap:8px;}
+  .viewer-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:28px;}
+  .tag-pill{
+    display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:0.72rem;color:#f0dab3;
+    background:rgba(201,154,75,0.32);padding:3px 6px 3px 10px;border-radius:20px;border:1px solid rgba(201,154,75,0.65);
+  }
+  .tag-pill button{background:none;border:none;color:inherit;opacity:0.7;cursor:pointer;font-size:0.95rem;line-height:1;padding:0 2px;}
+  .tag-pill button:hover{opacity:1;color:var(--danger);}
+  .add-tag-pill{
+    display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.06);border:1px dashed rgba(255,255,255,0.25);
+    border-radius:20px;padding:3px 10px;
+  }
+  .add-tag-pill input{
+    background:none;border:none;color:#fff;font-family:var(--mono);font-size:0.72rem;width:90px;outline:none;
+  }
+  .add-tag-pill input::placeholder{color:rgba(255,255,255,0.4);}
+  .add-tag-pill button{background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.85rem;padding:0;}
+
+  /* Fullscreen viewer pills: more opaque background + white text for legibility
+     against a photo, while keeping each pill's tint (amber/blue/pink) for
+     at-a-glance category recognition. Card-grid pills keep their original
+     look since they sit on a plain dark panel, not a photo. */
+  .tags-row .tag-pill{background:rgba(201,154,75,0.85);border-color:rgba(201,154,75,1);color:#fff;}
+  .news-row .link-pill.news{background:rgba(91,140,201,0.85);border-color:rgba(91,140,201,1);color:#fff;}
+  .videos-row .link-pill.video{background:rgba(201,91,140,0.85);border-color:rgba(201,91,140,1);color:#fff;}
+
+  .viewer-links{display:flex;gap:8px;flex-wrap:wrap;}
+  .link-pill{
+    display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:0.72rem;text-decoration:none;
+    padding:3px 12px;border-radius:20px;border:1px solid transparent;transition:opacity .15s;
+  }
+  .link-pill a{color:inherit;text-decoration:none;}
+  .link-pill:hover{opacity:0.9;}
+  .link-pill.news{color:#fff;background:rgba(91,140,201,0.34);border-color:rgba(91,140,201,0.7);}
+  .link-pill.video{color:#fff;background:rgba(201,91,140,0.34);border-color:rgba(201,91,140,0.7);}
+  .link-pill.disabled{opacity:0.35;pointer-events:none;}
+  .link-pill button{background:none;border:none;color:inherit;opacity:0.7;cursor:pointer;font-size:0.95rem;line-height:1;padding:0 0 0 2px;}
+  .link-pill button:hover{opacity:1;color:var(--danger);}
+  .add-link-pill{
+    display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.08);border:1px dashed rgba(255,255,255,0.3);
+    border-radius:20px;padding:3px 10px;
+  }
+  .add-link-pill input{
+    background:none;border:none;color:#fff;font-family:var(--mono);font-size:0.72rem;width:150px;outline:none;
+  }
+  .add-link-pill input::placeholder{color:rgba(255,255,255,0.4);}
+  .news-slot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .videos-slot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+
+  @media (max-width:640px){
+    header{padding:14px 16px;}
+    main{padding:16px;}
+    .search-inline{flex-basis:100%;}
+    .header-top .right{flex-basis:100%;justify-content:space-between;}
+    #results{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;}
+    .viewer-bottombar{padding:12px 14px 16px;}
+    .thumb-strip img{height:40px;width:58px;}
+  }
+
+  /* Awesomplete dark overrides */
+  .awesomplete{display:inline-block;vertical-align:top;}
+  .awesomplete > ul{
+    left:0; right:auto; top:100%;
+    z-index:100;
+    min-width:100%; width:auto; max-width:min(320px, calc(100vw - 20px));
+    max-height:50vh; overflow:auto;
+    margin:6px 0 0;
+    padding:0;
+    background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    box-shadow:0 8px 24px rgba(0,0,0,.45);
+    color:var(--text-dim);
+    transform-origin:0 0;
+  }
+  .awesomplete > ul:empty{display:none;}
+  .awesomplete > ul > li{padding:6px 10px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .awesomplete > ul > li:hover, .awesomplete > ul > li[aria-selected="true"]{background:var(--accent-dim); color:var(--accent);}
+  .awesomplete mark{background:transparent; color:var(--accent); font-weight:600;}
+  .awesomplete > ul:before{display:none;}
+  /* Open upward inside the fixed viewer bottom bar */
+  .viewer-row .awesomplete > ul{top:auto; bottom:100%; margin:0 0 6px; transform-origin:0 100%;}
+  /* Group cards need visible overflow so the dropdown isn't clipped */
+  .group-card{overflow:visible;}
+  /* Header filter: make Awesomplete wrapper fill the flex area */
+  .search-inline .awesomplete{flex:1; display:block;}
+  .search-inline .awesomplete > input{width:100%;}
+</style>
+</head>
+<body>
+
+  <div id="loadError">
+    <div class="big">Couldn't load the archive</div>
+    <div id="loadErrorMsg">—</div>
+    <p style="font-size:0.8rem;margin-top:14px;">
+      Make sure the server is running and <code>DATA_FILE</code> / <code>IMAGES_DIR</code> point at your files.
+    </p>
+  </div>
+
+  <div id="archive">
+    <header>
+      <div class="header-top">
+        <h1>Archive</h1>
+        <div class="search-inline">
+          <input type="text" id="tagInput" placeholder="Type a tag and press Enter…" autocomplete="off">
+          <div class="mode-toggle">
+            <button id="modeOr">OR</button>
+            <button id="modeAnd" class="active">AND</button>
+          </div>
+        </div>
+        <div class="right">
+          <span class="count" id="resultCount">0 groups</span>
+          <button class="rescan-btn" id="ungroupedBtn" title="Show images not yet in any group">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            <span id="ungroupedLabel">Ungrouped</span>
+          </button>
+          <button class="rescan-btn" id="rescanBtn" title="Re-scan the images folder for new files">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-3-6.7M21 3v6h-6"/></svg>
+            <span id="rescanLabel">Rescan</span>
+          </button>
+        </div>
+      </div>
+      <div class="chips" id="activeChips"></div>
+      <div class="tag-suggestions" id="tagSuggestions"></div>
+    </header>
+    <main>
+      <div id="ungroupedPanel" style="display:none;">
+        <div class="ungrouped-bar">
+          <span id="ungroupedCount">0 ungrouped images</span>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <button id="deleteSelectedBtn" class="danger-btn" disabled>Delete selected (<span id="deleteSelectedCount">0</span>)</button>
+            <button id="createGroupBtn" disabled>Create group from selected (<span id="selectedCount">0</span>)</button>
+          </div>
+        </div>
+        <div id="ungroupedGrid"></div>
+      </div>
+      <div id="results"></div>
+      <aside class="notes-panel" id="notesPanel">
+        <div class="notes-header">
+          <h3>Notes</h3>
+          <div class="notes-tabs">
+            <button id="notesEditTab">Write</button>
+            <button class="active" id="notesPreviewTab">Preview</button>
+          </div>
+        </div>
+        <div class="notes-toolbar" id="notesToolbar">
+          <button type="button" data-md="bold" title="Bold"><b>B</b></button>
+          <button type="button" data-md="italic" title="Italic"><i>I</i></button>
+          <button type="button" data-md="link" title="Link">🔗</button>
+          <span class="toolbar-sep"></span>
+          <button type="button" data-md="h2" title="Heading">H</button>
+          <button type="button" data-md="ul" title="Bulleted list">•</button>
+          <button type="button" data-md="ol" title="Numbered list">1.</button>
+          <button type="button" data-md="indent" title="Indent">⇥</button>
+          <button type="button" data-md="outdent" title="Outdent">⇤</button>
+          <span class="toolbar-sep"></span>
+          <button type="button" data-md="code" title="Code">&lt;/&gt;</button>
+          <button type="button" data-md="quote" title="Quote">”</button>
+        </div>
+        <textarea id="notesText" placeholder="Markdown notes..." spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+        <div id="notesPreview" class="notes-preview" style="display:none;"></div>
+        <div class="notes-status" id="notesStatus"></div>
+      </aside>
+    </main>
+  </div>
+
+
+
+  <div id="viewer">
+    <div class="viewer-stage">
+      <button class="nav-zone left" id="prevBtn" aria-label="Previous image">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <img id="stageImg" src="" alt="">
+      <button class="nav-zone right" id="nextBtn" aria-label="Next image">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
+    <div class="viewer-topbar">
+      <div class="viewer-topbar-left">
+        <span class="viewer-counter" id="viewerCounter">1 / 1</span>
+        <span class="viewer-filename" id="viewerFilename"></span>
+      </div>
+      <div class="viewer-topbar-right">
+        <button class="add-btn" id="addImgBtn" title="Add image to group">+</button>
+        <button class="remove-btn" id="removeImgBtn" title="Remove image from group">🗑</button>
+        <button class="close-btn" id="closeBtn" aria-label="Close">✕</button>
+      </div>
+    </div>
+    <div class="viewer-bottombar">
+      <div class="thumb-strip" id="thumbStrip"></div>
+      <div class="viewer-info" id="viewerInfo">
+        <div class="viewer-tags" id="viewerTags"></div>
+        <div class="viewer-links" id="viewerLinks"></div>
+      </div>
+    </div>
+    <div id="addImagePanel">
+      <div class="add-image-header">
+        <span>Add ungrouped image to group</span>
+        <button id="closeAddPanel" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="add-image-grid" id="addImageGrid"></div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/awesomplete@1.1.7/awesomplete.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  let archiveData = null;
+  let currentResults = [];
+  let mode = "and";
+  let activeTags = [];
+  let dragSourceGroup = null;
+  let viewerGroup = null;
+  let viewerIndex = 0;
+  let ungroupedFiles = [];
+  let selectedUngrouped = new Set();
+  let selectedHistory = []; // LIFO order of image selections for Esc unselect
+  let showingUngrouped = false;
+  let allImages = []; // every image filename indexed on disk, for news-date suggestions
+
+  const imgUrl = (filename) => filename ? ('/images/' + encodeURIComponent(filename)) : '';
+
+  // Pulls the first YYYY-MM-DD out of a filename, e.g. "2026-08-27-001.png"
+  // or "Screenshot from 2026-09-06 10-30-25.png", and returns it as a
+  // UTC-midnight timestamp for correct date math across month/year boundaries.
+  // Returns null if the filename doesn't contain a date.
+  function extractDateTs(filename){
+    const m = /(\d{4})-(\d{2})-(\d{2})/.exec(filename || '');
+    if(!m) return null;
+    return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const NEWS_LOOKBACK_DAYS = 14;
+
+  async function fetchAllImages(){
+    try{
+      const res = await fetch('/api/images');
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      allImages = data.files;
+    }catch(err){
+      console.error('Could not load image list:', err);
+    }
+  }
+
+  const rescanBtn = document.getElementById('rescanBtn');
+  const rescanLabel = document.getElementById('rescanLabel');
+
+  async function doRescan(){
+    rescanBtn.disabled = true;
+    rescanBtn.classList.add('spinning');
+    rescanLabel.textContent = 'Rescanning…';
+    try{
+      const res = await fetch('/api/rescan', { method: 'POST' });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      rescanLabel.textContent = data.imageCount + ' images found';
+      // Refresh the archive data too, and re-render so any newly-available
+      // images (for groups that were already listed) show up immediately.
+      await loadArchive();
+      await fetchAllImages();
+      if(showingUngrouped){ renderUngroupedGrid(); updateUngroupedActionButtons(); }
+    }catch(err){
+      rescanLabel.textContent = 'Rescan failed';
+      console.error(err);
+    }finally{
+      rescanBtn.classList.remove('spinning');
+      rescanBtn.disabled = false;
+      setTimeout(() => { rescanLabel.textContent = 'Rescan'; }, 2500);
+    }
+  }
+  rescanBtn.addEventListener('click', doRescan);
+
+  // -----------------------------------------------------------------
+  // Ungrouped images: files found on disk that aren't in any group yet
+  // -----------------------------------------------------------------
+  const ungroupedBtn = document.getElementById('ungroupedBtn');
+  const ungroupedLabel = document.getElementById('ungroupedLabel');
+  const ungroupedPanel = document.getElementById('ungroupedPanel');
+  const ungroupedGrid = document.getElementById('ungroupedGrid');
+  const ungroupedCountEl = document.getElementById('ungroupedCount');
+  const resultsMain = document.getElementById('results');
+  const createGroupBtn = document.getElementById('createGroupBtn');
+  const selectedCountEl = document.getElementById('selectedCount');
+  const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+  const deleteSelectedCountEl = document.getElementById('deleteSelectedCount');
+
+  async function fetchUngrouped(){
+    try{
+      const res = await fetch('/api/ungrouped');
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      ungroupedFiles = data.files;
+      ungroupedLabel.textContent = 'Ungrouped (' + ungroupedFiles.length + ')';
+    }catch(err){
+      console.error('Could not load ungrouped images:', err);
+    }
+  }
+
+  function renderUngroupedGrid(){
+    ungroupedGrid.innerHTML = '';
+    ungroupedCountEl.textContent = ungroupedFiles.length + ' ungrouped image' + (ungroupedFiles.length === 1 ? '' : 's');
+    ungroupedFiles.forEach(fn => {
+      const card = document.createElement('div');
+      card.className = 'ungrouped-card' + (selectedUngrouped.has(fn) ? ' selected' : '');
+
+      const thumb = document.createElement('div');
+      thumb.className = 'thumb';
+      const img = document.createElement('img');
+      img.loading = 'lazy';
+      img.src = imgUrl(fn);
+      thumb.appendChild(img);
+      card.appendChild(thumb);
+
+      const checkbox = document.createElement('div');
+      checkbox.className = 'checkbox';
+      checkbox.textContent = selectedUngrouped.has(fn) ? '✓' : '';
+      card.appendChild(checkbox);
+
+      const quickAdd = document.createElement('button');
+      quickAdd.className = 'quick-add';
+      quickAdd.title = 'Create a group from just this image';
+      quickAdd.textContent = '+';
+      quickAdd.addEventListener('click', (e) => {
+        e.stopPropagation();
+        createGroupFromFiles([fn]);
+      });
+      card.appendChild(quickAdd);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.title = 'Delete image from disk';
+      deleteBtn.textContent = '🗑';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteImages([fn]);
+      });
+      card.appendChild(deleteBtn);
+
+      const fname = document.createElement('div');
+      fname.className = 'fname';
+      fname.textContent = fn;
+      card.appendChild(fname);
+
+      card.addEventListener('click', () => {
+        if(selectedUngrouped.has(fn)){
+          selectedUngrouped.delete(fn);
+          selectedHistory = selectedHistory.filter(f => f !== fn);
+        } else {
+          selectedUngrouped.add(fn);
+          selectedHistory.push(fn);
+        }
+        renderUngroupedGrid();
+        updateUngroupedActionButtons();
+      });
+
+      ungroupedGrid.appendChild(card);
+    });
+  }
+
+  function updateUngroupedActionButtons(){
+    selectedCountEl.textContent = selectedUngrouped.size;
+    deleteSelectedCountEl.textContent = selectedUngrouped.size;
+    createGroupBtn.disabled = selectedUngrouped.size === 0;
+    deleteSelectedBtn.disabled = selectedUngrouped.size === 0;
+  }
+
+  async function deleteImages(files){
+    if(!files || files.length === 0) return;
+    const list = files.join('\n');
+    if(!confirm('Permanently delete these image(s) from disk?\n\n' + list)) return;
+    try{
+      const res = await fetch('/api/images/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files })
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      const failed = (data.deleted || []).filter(d => !d.ok);
+      if(failed.length){
+        alert('Some files could not be deleted:\n' + failed.map(d => d.file + ': ' + d.error).join('\n'));
+      }
+      files.forEach(f => selectedUngrouped.delete(f));
+      selectedHistory = selectedHistory.filter(f => !files.includes(f));
+      await Promise.all([fetchUngrouped(), fetchAllImages()]);
+      if(showingUngrouped){ renderUngroupedGrid(); updateUngroupedActionButtons(); }
+      if(viewerGroup){ renderAddImagePanel(); }
+      renderResults();
+    }catch(err){
+      alert('Could not delete image(s): ' + err.message);
+    }
+  }
+
+  deleteSelectedBtn.addEventListener('click', () => {
+    if(selectedUngrouped.size === 0) return;
+    deleteImages(Array.from(selectedUngrouped));
+  });
+
+  async function createGroupFromFiles(files){
+    try{
+      const res = await fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files, tags: [], youtubes: [], news: '' })
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      selectedUngrouped.clear();
+      selectedHistory = [];
+      await Promise.all([loadArchive(), fetchUngrouped()]);
+      renderUngroupedGrid();
+      updateUngroupedActionButtons();
+    }catch(err){
+      alert('Could not create group: ' + err.message);
+    }
+  }
+
+  createGroupBtn.addEventListener('click', () => {
+    if(selectedUngrouped.size === 0) return;
+    createGroupFromFiles(Array.from(selectedUngrouped));
+  });
+
+  async function setUngroupedView(show){
+    showingUngrouped = show;
+    ungroupedBtn.classList.toggle('active-view', showingUngrouped);
+    ungroupedPanel.style.display = showingUngrouped ? 'block' : 'none';
+    resultsMain.style.display = showingUngrouped ? 'none' : 'grid';
+    notesPanel.style.display = showingUngrouped ? 'none' : '';
+    if(showingUngrouped){
+      await fetchUngrouped();
+      renderUngroupedGrid();
+      updateUngroupedActionButtons();
+    }
+  }
+
+  ungroupedBtn.addEventListener('click', async () => {
+    await setUngroupedView(!showingUngrouped);
+  });
+
+  async function loadArchive(){
+    try{
+      const res = await fetch('/api/data');
+      if(!res.ok){
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || ('HTTP ' + res.status));
+      }
+      archiveData = await res.json();
+      document.getElementById('archive').style.display = 'flex';
+      if(!tagInputAw){
+        tagInputAw = attachAwesomplete(tagInput, allTags(), (value) => addTag(value));
+      }
+      buildTagSuggestions();
+      renderResults();
+      fetchUngrouped();
+      loadNotes();
+    }catch(err){
+      document.getElementById('loadErrorMsg').textContent = err.message;
+      document.getElementById('loadError').style.display = 'block';
+    }
+  }
+
+  // A group has no single stable id, so we identify it by its first file
+  // when talking to the tag API — any file in the group works.
+  async function apiChangeTags(group, { add = [], remove = [] }){
+    const fn = (group.files || [])[0];
+    const res = await fetch('/api/groups/' + encodeURIComponent(fn) + '/tags', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ add, remove })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    group.tags = data.tags;
+    if(Array.isArray(data.allTags) && archiveData) archiveData.tags = data.allTags;
+    return group.tags;
+  }
+
+  async function addTagToGroup(group, tag, onDone){
+    tag = tag.trim();
+    if(!tag) return;
+    try{
+      await apiChangeTags(group, { add: [tag] });
+      buildTagSuggestions();
+      renderResults();
+      if(onDone) onDone();
+    }catch(err){ alert('Could not add tag: ' + err.message); }
+  }
+
+  async function removeTagFromGroup(group, tag, onDone){
+    try{
+      await apiChangeTags(group, { remove: [tag] });
+      buildTagSuggestions();
+      renderResults();
+      if(onDone) onDone();
+    }catch(err){ alert('Could not remove tag: ' + err.message); }
+  }
+
+  async function deleteGroup(group){
+    const fn = (group.files || [])[0];
+    if(!fn) return;
+    if(!confirm('Delete this group and its image files? The news clipping (if any) will be kept.')) return;
+    try{
+      const res = await fetch('/api/groups/' + encodeURIComponent(fn) + '/delete', { method: 'POST' });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      await loadArchive();
+    }catch(err){ alert('Could not delete group: ' + err.message); }
+  }
+
+  async function moveGroup(group, direction){
+    const fn = (group.files || [])[0];
+    if(!fn) return;
+    try{
+      const res = await fetch('/api/groups/' + encodeURIComponent(fn) + '/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction })
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      await loadArchive();
+    }catch(err){ alert('Could not move group: ' + err.message); }
+  }
+
+  async function reorderGroup(sourceGroup, targetGroup, position){
+    const sourceFn = (sourceGroup.files || [])[0];
+    const targetFn = (targetGroup.files || [])[0];
+    if(!sourceFn || !targetFn || sourceFn === targetFn) return;
+    try{
+      const res = await fetch('/api/groups/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: sourceFn, target: targetFn, position })
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      await loadArchive();
+    }catch(err){ alert('Could not reorder group: ' + err.message); }
+  }
+
+  // Small helper to attach an Awesomplete dropdown to an input.
+  // `onSelect` is called with the chosen (or typed) value.
+  function attachAwesomplete(input, list, onSelect, opts = {}){
+    const aw = new Awesomplete(input, {
+      list,
+      minChars: 0,
+      maxItems: 1000,
+      autoFirst: true,
+      filter: Awesomplete.FILTER_CONTAINS,
+      sort: false,
+      tabSelect: false,
+      ...opts
+    });
+    input.addEventListener('focus', () => aw.evaluate());
+    input.addEventListener('awesomplete-selectcomplete', (e) => {
+      onSelect(e.text.value);
+      input.value = '';
+      aw.close();
+    });
+    if(opts.allowFreeText !== false){
+      input.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' && input.value.trim()){
+          onSelect(input.value.trim());
+          input.value = '';
+          aw.close();
+        }
+      });
+    }
+    return aw;
+  }
+
+  // Renders an editable set of tag pills into `container` for `group`,
+  // calling `onChange` after any successful add/remove so the caller
+  // can re-render itself (e.g. the viewer chrome).
+  function renderEditableTags(container, group, onChange){
+    container.innerHTML = '';
+    const sortedTags = [...(group.tags || [])].sort((a, b) => a.localeCompare(b));
+
+    const addPill = document.createElement('div');
+    addPill.className = 'add-tag-pill';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = '+ add tag';
+    input.addEventListener('click', (e) => e.stopPropagation());
+    addPill.appendChild(input);
+    container.appendChild(addPill);
+
+    const currentTags = new Set(group.tags || []);
+    attachAwesomplete(
+      input,
+      allTags().filter(t => !currentTags.has(t)),
+      (value) => addTagToGroup(group, value, onChange)
+    );
+
+    sortedTags.forEach(tag => {
+      const pill = document.createElement('span');
+      pill.className = 'tag-pill';
+      const label = document.createElement('span');
+      label.textContent = tag;
+      pill.appendChild(label);
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '×';
+      removeBtn.title = 'Remove tag';
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeTagFromGroup(group, tag, onChange);
+      });
+      pill.appendChild(removeBtn);
+      container.appendChild(pill);
+    });
+  }
+
+  function allTags(){
+    const set = new Set();
+    if(archiveData && Array.isArray(archiveData.tags)){
+      archiveData.tags.forEach(t => set.add(t));
+    }
+    // Also pick up any tags that exist only in groups (e.g. legacy data).
+    if(archiveData && Array.isArray(archiveData.files)){
+      archiveData.files.forEach(g => (g.tags || []).forEach(t => set.add(t)));
+    }
+    return Array.from(set).sort((a,b) => a.localeCompare(b));
+  }
+
+  function matchesGroup(group){
+    if(activeTags.length === 0) return true;
+    const tags = group.tags || [];
+    return mode === "or"
+      ? activeTags.some(t => tags.includes(t))
+      : activeTags.every(t => tags.includes(t));
+  }
+
+  const tagInput = document.getElementById('tagInput');
+  const activeChips = document.getElementById('activeChips');
+  const tagSuggestions = document.getElementById('tagSuggestions');
+  const notesText = document.getElementById('notesText');
+  const notesStatus = document.getElementById('notesStatus');
+  const notesEditTab = document.getElementById('notesEditTab');
+  const notesPreviewTab = document.getElementById('notesPreviewTab');
+  const notesPreview = document.getElementById('notesPreview');
+  const notesToolbar = document.getElementById('notesToolbar');
+  const modeOrBtn = document.getElementById('modeOr');
+  const modeAndBtn = document.getElementById('modeAnd');
+  const resultCount = document.getElementById('resultCount');
+  const resultsEl = document.getElementById('results');
+
+  let tagInputAw = null;
+  let notesSaveTimer = null;
+  let notesMode = 'preview';
+
+  function renderNotesPreview(){
+    const raw = notesText.value.trim();
+    if(!raw){
+      notesPreview.innerHTML = '<em style="color:var(--text-dim)">Nothing to preview.</em>';
+      return;
+    }
+    const parse = (typeof marked !== 'undefined' && marked.parse) ? marked.parse : marked;
+    const html = parse(raw);
+    const clean = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
+    notesPreview.innerHTML = clean;
+  }
+
+  function setNotesMode(mode){
+    notesMode = mode;
+    if(mode === 'edit'){
+      notesToolbar.style.display = '';
+      notesText.style.display = '';
+      notesPreview.style.display = 'none';
+      notesEditTab.classList.add('active');
+      notesPreviewTab.classList.remove('active');
+      notesText.focus();
+    }else{
+      notesToolbar.style.display = 'none';
+      renderNotesPreview();
+      notesText.style.display = 'none';
+      notesPreview.style.display = '';
+      notesEditTab.classList.remove('active');
+      notesPreviewTab.classList.add('active');
+    }
+  }
+
+  notesEditTab.addEventListener('click', () => setNotesMode('edit'));
+  notesPreviewTab.addEventListener('click', () => setNotesMode('preview'));
+
+  function getInputSelection(input){
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const text = input.value;
+    return { start, end, before: text.slice(0, start), selected: text.slice(start, end), after: text.slice(end) };
+  }
+
+  function setInputSelection(input, start, end){
+    input.setSelectionRange(start, end);
+    input.focus();
+  }
+
+  function prefixLines(text, prefix){
+    if(!text) return prefix;
+    return text.split('\n').map(line => {
+      if(line.trim() === '') return line;
+      return prefix + line;
+    }).join('\n');
+  }
+
+  function indentLines(text, spaces){
+    const indent = ' '.repeat(spaces);
+    if(!text) return indent;
+    return text.split('\n').map(line => {
+      if(line === '') return line;
+      return indent + line;
+    }).join('\n');
+  }
+
+  function outdentLines(text, spaces){
+    if(!text) return text;
+    const indent = ' '.repeat(spaces);
+    return text.split('\n').map(line => {
+      if(line.startsWith(indent)) return line.slice(spaces);
+      if(line.startsWith('\t')) return line.slice(1);
+      return line;
+    }).join('\n');
+  }
+
+  function insertMarkdown(type){
+    if(notesMode !== 'edit') setNotesMode('edit');
+    const { start, end, before, selected, after } = getInputSelection(notesText);
+    let replacement = selected;
+    let newStart = start;
+    let newEnd = end;
+
+    switch(type){
+      case 'bold':
+        replacement = '**' + (selected || 'bold text') + '**';
+        newStart = start + 2;
+        newEnd = newStart + (selected ? selected.length : 'bold text'.length);
+        break;
+      case 'italic':
+        replacement = '*' + (selected || 'italic text') + '*';
+        newStart = start + 1;
+        newEnd = newStart + (selected ? selected.length : 'italic text'.length);
+        break;
+      case 'link':
+        if(selected && /^https?:\/\//.test(selected)){
+          replacement = '[' + selected + '](' + selected + ')';
+          newStart = start + 1;
+          newEnd = start + 1 + selected.length;
+        }else{
+          replacement = '[' + (selected || 'link text') + '](url)';
+          newStart = start + 1;
+          newEnd = newStart + (selected ? selected.length : 'link text'.length);
+        }
+        break;
+      case 'h2':
+        replacement = '## ' + (selected || 'Heading');
+        newStart = start + 3;
+        newEnd = newStart + (selected ? selected.length : 'Heading'.length);
+        break;
+      case 'ul':
+        replacement = prefixLines(selected || 'list item', '- ');
+        newStart = start;
+        newEnd = newStart + replacement.length;
+        break;
+      case 'ol':
+        replacement = prefixLines(selected || 'list item', '1. ');
+        newStart = start;
+        newEnd = newStart + replacement.length;
+        break;
+      case 'code':
+        if(selected.includes('\n')){
+          replacement = '```\n' + selected + '\n```';
+          newStart = start + 4;
+          newEnd = newStart + selected.length;
+        }else{
+          replacement = '`' + (selected || 'code') + '`';
+          newStart = start + 1;
+          newEnd = newStart + (selected ? selected.length : 'code'.length);
+        }
+        break;
+      case 'quote':
+        replacement = prefixLines(selected || 'quote', '> ');
+        newStart = start;
+        newEnd = newStart + replacement.length;
+        break;
+      case 'indent':
+        replacement = indentLines(selected || '', 2);
+        newStart = start + replacement.length;
+        newEnd = newStart;
+        break;
+      case 'outdent':
+        replacement = outdentLines(selected || '', 2);
+        newStart = start + replacement.length;
+        newEnd = newStart;
+        break;
+    }
+
+    notesText.value = before + replacement + after;
+    notesText.dispatchEvent(new Event('input', { bubbles: true }));
+    setInputSelection(notesText, newStart, newEnd);
+  }
+
+  notesToolbar.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-md]');
+    if(!btn) return;
+    e.preventDefault();
+    insertMarkdown(btn.dataset.md);
+  });
+
+  async function loadNotes(){
+    if(document.activeElement === notesText) return;
+    try{
+      const res = await fetch('/api/notes');
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      notesText.value = data.notes || '';
+      if(notesMode === 'preview') renderNotesPreview();
+      notesStatus.textContent = '';
+    }catch(err){
+      console.error('Could not load notes:', err);
+    }
+  }
+
+  async function saveNotes(){
+    const text = notesText.value;
+    notesStatus.textContent = 'Saving...';
+    try{
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: text })
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      notesStatus.textContent = 'Saved';
+      setTimeout(() => { if(notesStatus.textContent === 'Saved') notesStatus.textContent = ''; }, 2000);
+    }catch(err){
+      notesStatus.textContent = 'Save failed';
+      console.error('Could not save notes:', err);
+    }
+  }
+
+  notesText.addEventListener('input', () => {
+    notesStatus.textContent = 'Unsaved';
+    clearTimeout(notesSaveTimer);
+    notesSaveTimer = setTimeout(saveNotes, 800);
+    if(notesMode === 'preview') renderNotesPreview();
+  });
+
+  async function deleteTag(tag){
+    if(!confirm('Delete tag "' + tag + '" from the archive? This will remove it from every group.')) return;
+    try{
+      const res = await fetch('/api/tags/' + encodeURIComponent(tag), { method: 'DELETE' });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      if(archiveData) archiveData.tags = data.tags;
+      archiveData.files.forEach(g => { if(g.tags) g.tags = g.tags.filter(t => t !== tag); });
+      activeTags = activeTags.filter(t => t !== tag);
+      renderChips(); buildTagSuggestions(); renderResults();
+      if(document.getElementById('viewer').style.display === 'flex') renderViewerChrome();
+    }catch(err){ alert('Could not delete tag: ' + err.message); }
+  }
+
+  function buildTagSuggestions(){
+    tagSuggestions.innerHTML = "";
+    allTags().forEach(tag => {
+      if(activeTags.includes(tag)) return;
+      const chip = document.createElement('div');
+      chip.className = 'tag-suggestion';
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'tag-add';
+      addBtn.textContent = tag;
+      addBtn.addEventListener('click', () => addTag(tag));
+      chip.appendChild(addBtn);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'tag-delete';
+      delBtn.textContent = '×';
+      delBtn.title = 'Delete tag permanently';
+      delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteTag(tag); });
+      chip.appendChild(delBtn);
+
+      tagSuggestions.appendChild(chip);
+    });
+
+    if(tagInputAw) tagInputAw.list = allTags();
+  }
+
+  function addTag(tag){
+    tag = tag.trim();
+    if(!tag || activeTags.includes(tag)) return;
+    activeTags.push(tag);
+    renderChips(); buildTagSuggestions(); renderResults();
+  }
+  function removeTag(tag){
+    activeTags = activeTags.filter(t => t !== tag);
+    renderChips(); buildTagSuggestions(); renderResults();
+  }
+  function renderChips(){
+    activeChips.innerHTML = "";
+    activeTags.forEach(tag => {
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.innerHTML = '<span>' + escapeHtml(tag) + '</span>';
+      const btn = document.createElement('button');
+      btn.textContent = '×';
+      btn.addEventListener('click', () => removeTag(tag));
+      chip.appendChild(btn);
+      activeChips.appendChild(chip);
+    });
+  }
+
+
+  modeOrBtn.addEventListener('click', () => {
+    mode = "or"; modeOrBtn.classList.add('active'); modeAndBtn.classList.remove('active'); renderResults();
+  });
+  modeAndBtn.addEventListener('click', () => {
+    mode = "and"; modeAndBtn.classList.add('active'); modeOrBtn.classList.remove('active'); renderResults();
+  });
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function renderResults(){
+    currentResults = archiveData.files.filter(matchesGroup);
+    resultCount.textContent = currentResults.length + (currentResults.length === 1 ? " group" : " groups");
+    resultsEl.innerHTML = "";
+
+    if(currentResults.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.innerHTML = '<div class="big">No matches</div><div>Try removing a tag or switching to OR.</div>';
+      resultsEl.appendChild(empty);
+      return;
+    }
+
+    currentResults.forEach(group => {
+      const card = document.createElement('div');
+      card.className = 'group-card';
+
+      const thumbWrap = document.createElement('div');
+      thumbWrap.className = 'thumb-wrap';
+      const img = document.createElement('img');
+      img.loading = 'lazy';
+      img.src = imgUrl((group.files || [])[0]);
+      thumbWrap.appendChild(img);
+
+      const countBadge = document.createElement('div');
+      countBadge.className = 'thumb-count';
+      countBadge.textContent = (group.files || []).length + ' image' + ((group.files||[]).length === 1 ? '' : 's');
+      thumbWrap.appendChild(countBadge);
+
+      const dragHandle = document.createElement('div');
+      dragHandle.className = 'card-drag-handle';
+      dragHandle.textContent = '☰';
+      dragHandle.title = 'Drag to reorder';
+      dragHandle.addEventListener('click', (e) => e.stopPropagation());
+      thumbWrap.appendChild(dragHandle);
+
+      const actions = document.createElement('div');
+      actions.className = 'card-actions';
+      const upBtn = document.createElement('button');
+      upBtn.className = 'move-up';
+      upBtn.textContent = '↑';
+      upBtn.title = 'Move group up';
+      upBtn.addEventListener('click', (e) => { e.stopPropagation(); moveGroup(group, 'up'); });
+      actions.appendChild(upBtn);
+      const downBtn = document.createElement('button');
+      downBtn.className = 'move-down';
+      downBtn.textContent = '↓';
+      downBtn.title = 'Move group down';
+      downBtn.addEventListener('click', (e) => { e.stopPropagation(); moveGroup(group, 'down'); });
+      actions.appendChild(downBtn);
+      const delBtn = document.createElement('button');
+      delBtn.className = 'delete-group';
+      delBtn.textContent = '✕';
+      delBtn.title = 'Delete group and its files';
+      delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteGroup(group); });
+      actions.appendChild(delBtn);
+      thumbWrap.appendChild(actions);
+
+      card.appendChild(thumbWrap);
+
+      const body = document.createElement('div');
+      body.className = 'card-body';
+
+      const tagsRow = document.createElement('div');
+      tagsRow.className = 'card-tags';
+      renderEditableTags(tagsRow, group);
+      body.appendChild(tagsRow);
+
+      const meta = document.createElement('div');
+      meta.className = 'card-meta';
+      let metaParts = [];
+      if(group.news) metaParts.push('news · ' + group.news);
+      if(group.youtubes && group.youtubes.length) metaParts.push(group.youtubes.length + ' video' + (group.youtubes.length === 1 ? '' : 's'));
+      meta.textContent = metaParts.join('  ·  ');
+      body.appendChild(meta);
+
+      card.appendChild(body);
+      card.addEventListener('click', () => openViewer(group));
+
+      card.draggable = true;
+      card.addEventListener('dragstart', (e) => {
+        dragSourceGroup = group;
+        card.classList.add('dragging');
+        e.dataTransfer.setData('text/plain', (group.files || [])[0] || '');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      card.addEventListener('dragend', () => {
+        dragSourceGroup = null;
+        card.classList.remove('dragging');
+        document.querySelectorAll('.group-card').forEach(c => {
+          c.classList.remove('drop-before', 'drop-after');
+        });
+      });
+      card.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if(!dragSourceGroup || dragSourceGroup === group) return;
+        const rect = card.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const before = e.clientY < midY;
+        card.classList.toggle('drop-before', before);
+        card.classList.toggle('drop-after', !before);
+      });
+      card.addEventListener('dragleave', () => {
+        card.classList.remove('drop-before', 'drop-after');
+      });
+      card.addEventListener('drop', (e) => {
+        e.preventDefault();
+        card.classList.remove('drop-before', 'drop-after');
+        if(!dragSourceGroup || dragSourceGroup === group) return;
+        const rect = card.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const position = e.clientY < midY ? 'before' : 'after';
+        reorderGroup(dragSourceGroup, group, position);
+      });
+
+      resultsEl.appendChild(card);
+    });
+  }
+
+  const viewer = document.getElementById('viewer');
+  const stageImg = document.getElementById('stageImg');
+  const viewerCounter = document.getElementById('viewerCounter');
+  const viewerFilename = document.getElementById('viewerFilename');
+  const thumbStrip = document.getElementById('thumbStrip');
+  const viewerTags = document.getElementById('viewerTags');
+  const viewerLinks = document.getElementById('viewerLinks');
+  const viewerInfo = document.getElementById('viewerInfo');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const closeBtn = document.getElementById('closeBtn');
+  const removeImgBtn = document.getElementById('removeImgBtn');
+  const addImgBtn = document.getElementById('addImgBtn');
+  const addImagePanel = document.getElementById('addImagePanel');
+  const addImageGrid = document.getElementById('addImageGrid');
+  const closeAddPanel = document.getElementById('closeAddPanel');
+
+  function openViewer(group){
+    viewerGroup = group;
+    viewerIndex = 0;
+    renderViewerChrome();
+    showViewerImage();
+    viewer.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+  function closeViewer(){
+    viewer.style.display = 'none';
+    addImagePanel.style.display = 'none';
+    document.body.style.overflow = '';
+    viewerGroup = null;
+  }
+
+  async function removeImageFromGroup(group, filename){
+    const fn = (group.files || [])[0];
+    const res = await fetch('/api/groups/' + encodeURIComponent(fn) + '/files/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: [filename] })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    return data.files;
+  }
+
+  async function onRemoveImage(){
+    if(!viewerGroup) return;
+    const files = viewerGroup.files || [];
+    const fn = files[viewerIndex];
+    if(!fn) return;
+    if(!confirm('Remove "' + fn + '" from this group?')) return;
+    try{
+      const remaining = await removeImageFromGroup(viewerGroup, fn);
+      await loadArchive();
+      await fetchUngrouped();
+      if(showingUngrouped){ renderUngroupedGrid(); updateUngroupedActionButtons(); }
+
+      const still = archiveData.files.find(g => (g.files || []).some(f => remaining.includes(f)));
+      if(!still || still.files.length === 0){
+        closeViewer();
+      } else {
+        viewerGroup = still;
+        if(viewerIndex >= viewerGroup.files.length) viewerIndex = viewerGroup.files.length - 1;
+        renderViewerChrome();
+        showViewerImage();
+      }
+      renderResults();
+    }catch(err){
+      alert('Could not remove image: ' + err.message);
+    }
+  }
+
+  removeImgBtn.addEventListener('click', onRemoveImage);
+
+  async function addImagesToGroup(group, filenames, at){
+    const fn = (group.files || [])[0];
+    const body = { files: filenames };
+    if(typeof at === 'number' && Number.isInteger(at)) body.at = at;
+    const res = await fetch('/api/groups/' + encodeURIComponent(fn) + '/files/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    return data.files;
+  }
+
+  function renderAddImagePanel(){
+    addImageGrid.innerHTML = '';
+    if(ungroupedFiles.length === 0){
+      addImageGrid.innerHTML = '<div class="add-image-empty">No ungrouped images</div>';
+      return;
+    }
+    ungroupedFiles.forEach(fn => {
+      const card = document.createElement('div');
+      card.className = 'add-image-card';
+      card.title = 'Add ' + fn;
+
+      const thumb = document.createElement('div');
+      thumb.className = 'thumb';
+      const img = document.createElement('img');
+      img.loading = 'lazy';
+      img.src = imgUrl(fn);
+      thumb.appendChild(img);
+      card.appendChild(thumb);
+
+      const plus = document.createElement('div');
+      plus.className = 'plus';
+      plus.textContent = '+';
+      card.appendChild(plus);
+
+      const fname = document.createElement('div');
+      fname.className = 'fname';
+      fname.textContent = fn;
+      card.appendChild(fname);
+
+      card.addEventListener('click', () => onAddImage(fn));
+      addImageGrid.appendChild(card);
+    });
+  }
+
+  async function toggleAddImagePanel(){
+    const showing = addImagePanel.style.display === 'flex';
+    if(showing){
+      addImagePanel.style.display = 'none';
+    } else {
+      await fetchUngrouped();
+      renderAddImagePanel();
+      addImagePanel.style.display = 'flex';
+    }
+  }
+
+  async function onAddImage(fn){
+    if(!viewerGroup || !fn) return;
+    const insertAt = viewerIndex;
+    try{
+      const updated = await addImagesToGroup(viewerGroup, [fn], insertAt);
+      await loadArchive();
+      await fetchUngrouped();
+      if(showingUngrouped){ renderUngroupedGrid(); updateUngroupedActionButtons(); }
+
+      const still = archiveData.files.find(g => (g.files || []).some(f => updated.includes(f)));
+      if(still){
+        viewerGroup = still;
+        viewerIndex = Math.min(insertAt, viewerGroup.files.length - 1);
+        renderViewerChrome();
+        showViewerImage();
+        renderAddImagePanel();
+      }
+      renderResults();
+    }catch(err){
+      alert('Could not add image: ' + err.message);
+    }
+  }
+
+  addImgBtn.addEventListener('click', toggleAddImagePanel);
+  closeAddPanel.addEventListener('click', () => { addImagePanel.style.display = 'none'; });
+
+  // Sets (or clears with "") the news filename on a group. The same news
+  // file is allowed to be reused across multiple groups — no uniqueness
+  // check here, unlike group `files`.
+  async function apiSetNews(group, value){
+    const fn = (group.files || [])[0];
+    const res = await fetch('/api/groups/' + encodeURIComponent(fn) + '/news', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    group.news = data.news;
+    return group.news;
+  }
+
+  async function setGroupNews(group, value, onDone){
+    try{
+      await apiSetNews(group, value.trim());
+      renderResults();
+      if(onDone) onDone();
+    }catch(err){ alert('Could not update news: ' + err.message); }
+  }
+
+  async function clearGroupNews(group, onDone){
+    try{
+      await apiSetNews(group, '');
+      renderResults();
+      if(onDone) onDone();
+    }catch(err){ alert('Could not clear news: ' + err.message); }
+  }
+
+  // Content shots follow "YYYY-MM-DD-NNN.png"-style sequential numbering;
+  // news clippings are typically a single dated file without that extra
+  // suffix (e.g. "2026-08-24.png", not "2026-08-24-001.png"). We anchor to
+  // the leading date and check what follows it, rather than matching
+  // "-<digits>" anywhere at the end — a plain dated file's day-of-month
+  // (e.g. the "24" in "2026-08-24.png") looks identical to a numbered
+  // suffix if matched naively, which would wrongly exclude it too.
+  function hasSequentialSuffix(filename){
+    const m = /^\d{4}-\d{2}-\d{2}(.*)\.png$/i.exec(filename || '');
+    if(!m) return false; // no leading date to anchor against — leave filtering to the date-window check
+    return /^-\d+$/.test(m[1]); // anything between the date and ".png"
+  }
+
+  // Suggests images dated on the same day as, or up to NEWS_LOOKBACK_DAYS
+  // before, any of this group's own image dates — using real date math so
+  // it correctly handles crossing month and year boundaries, rather than
+  // matching the filename's date prefix as a literal string. Excludes files
+  // already in the group (those are content, not a news clipping), and
+  // excludes sequentially-numbered filenames for the same reason.
+  function suggestedNewsFiles(group){
+    const groupTimestamps = (group.files || []).map(extractDateTs).filter(ts => ts !== null);
+    if(groupTimestamps.length === 0) return [];
+    const groupFileSet = new Set(group.files || []);
+
+    return allImages.filter(fn => {
+      if(groupFileSet.has(fn)) return false;
+      if(hasSequentialSuffix(fn)) return false;
+      if(/screenshot/i.test(fn)) return false;
+      const candidateTs = extractDateTs(fn);
+      if(candidateTs === null) return false;
+      return groupTimestamps.some(groupTs => {
+        const daysBefore = (groupTs - candidateTs) / MS_PER_DAY;
+        return daysBefore >= 0 && daysBefore <= NEWS_LOOKBACK_DAYS;
+      });
+    });
+  }
+
+  // Renders the news field as an editable pill (with a remove button when
+  // set) plus an input for setting/replacing it.
+  function renderEditableNews(container, group, onChange){
+    container.innerHTML = '';
+    if(group.news){
+      const pill = document.createElement('span');
+      pill.className = 'link-pill news';
+      const label = document.createElement('a');
+      label.textContent = group.news;
+      label.href = imgUrl(group.news);
+      label.target = '_blank';
+      pill.appendChild(label);
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '×';
+      removeBtn.title = 'Remove news file';
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        clearGroupNews(group, onChange);
+      });
+      pill.appendChild(removeBtn);
+      container.appendChild(pill);
+    }
+
+    // Only show an add input when there is no news file. To replace, the
+    // user deletes the existing one and then adds a new one.
+    if(!group.news){
+      const addPill = document.createElement('div');
+      addPill.className = 'add-link-pill';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = '+ add news file';
+      input.addEventListener('click', (e) => e.stopPropagation());
+      addPill.appendChild(input);
+      container.appendChild(addPill);
+
+      attachAwesomplete(
+        input,
+        suggestedNewsFiles(group),
+        (value) => setGroupNews(group, value, onChange)
+      );
+    }
+  }
+
+  async function apiChangeVideos(group, { add = [], remove = [] }){
+    const fn = (group.files || [])[0];
+    const res = await fetch('/api/groups/' + encodeURIComponent(fn) + '/youtubes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ add, remove })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    group.youtubes = data.youtubes;
+    return group.youtubes;
+  }
+
+  async function addVideoToGroup(group, url, onDone){
+    url = url.trim();
+    if(!url) return;
+    try{
+      await apiChangeVideos(group, { add: [url] });
+      renderResults();
+      if(onDone) onDone();
+    }catch(err){ alert('Could not add video link: ' + err.message); }
+  }
+
+  async function removeVideoFromGroup(group, url, onDone){
+    try{
+      await apiChangeVideos(group, { remove: [url] });
+      renderResults();
+      if(onDone) onDone();
+    }catch(err){ alert('Could not remove video link: ' + err.message); }
+  }
+
+  // Renders each video link as a removable pill, plus an input for adding
+  // more. A group can hold any number of video links.
+  function renderEditableVideos(container, group, onChange){
+    container.innerHTML = '';
+
+    const addPill = document.createElement('div');
+    addPill.className = 'add-link-pill';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = '+ add video URL';
+    input.addEventListener('click', (e) => e.stopPropagation());
+    input.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter' && input.value.trim()){
+        addVideoToGroup(group, input.value, onChange);
+        input.value = '';
+      }
+    });
+    addPill.appendChild(input);
+    container.appendChild(addPill);
+
+    (group.youtubes || []).forEach((url, i) => {
+      const pill = document.createElement('span');
+      pill.className = 'link-pill video';
+      const label = document.createElement('a');
+      label.textContent = '▶ ' + ((group.youtubes.length > 1) ? ('video ' + (i+1)) : 'video');
+      label.title = url;
+      label.href = url;
+      label.target = '_blank';
+      label.rel = 'noopener noreferrer';
+      pill.appendChild(label);
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '×';
+      removeBtn.title = 'Remove this video link';
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeVideoFromGroup(group, url, onChange);
+      });
+      pill.appendChild(removeBtn);
+      container.appendChild(pill);
+    });
+  }
+
+  function renderViewerChrome(){
+    viewerInfo.innerHTML = "";
+
+    const newsRow = document.createElement('div');
+    newsRow.className = 'viewer-row news-row';
+    renderEditableNews(newsRow, viewerGroup, () => renderViewerChrome());
+    viewerInfo.appendChild(newsRow);
+
+    const videosRow = document.createElement('div');
+    videosRow.className = 'viewer-row videos-row';
+    renderEditableVideos(videosRow, viewerGroup, () => renderViewerChrome());
+    viewerInfo.appendChild(videosRow);
+
+    const tagsRow = document.createElement('div');
+    tagsRow.className = 'viewer-row tags-row';
+    renderEditableTags(tagsRow, viewerGroup, () => {
+      // keep the on-screen group object in sync if re-rendered mid-view
+      renderViewerChrome();
+    });
+    viewerInfo.appendChild(tagsRow);
+
+    thumbStrip.innerHTML = "";
+    let dragSourceIndex = null;
+    (viewerGroup.files || []).forEach((fn, i) => {
+      const item = document.createElement('div');
+      item.className = 'thumb-item';
+
+      const img = document.createElement('img');
+      img.src = imgUrl(fn);
+      img.className = (i === viewerIndex) ? 'active' : '';
+      img.addEventListener('click', () => { viewerIndex = i; showViewerImage(); });
+      item.appendChild(img);
+
+      const handle = document.createElement('div');
+      handle.className = 'thumb-drag-handle';
+      handle.textContent = '☰';
+      handle.title = 'Drag to reorder';
+      handle.addEventListener('click', (e) => e.stopPropagation());
+      item.appendChild(handle);
+
+      if((viewerGroup.files || []).length > 1){
+        const leftBtn = document.createElement('button');
+        leftBtn.className = 'thumb-move left';
+        leftBtn.textContent = '←';
+        leftBtn.title = 'Move left';
+        leftBtn.addEventListener('click', (e) => { e.stopPropagation(); moveViewerFile(i, 'left'); });
+        item.appendChild(leftBtn);
+
+        const rightBtn = document.createElement('button');
+        rightBtn.className = 'thumb-move right';
+        rightBtn.textContent = '→';
+        rightBtn.title = 'Move right';
+        rightBtn.addEventListener('click', (e) => { e.stopPropagation(); moveViewerFile(i, 'right'); });
+        item.appendChild(rightBtn);
+      }
+
+      item.draggable = true;
+      item.addEventListener('dragstart', (e) => {
+        dragSourceIndex = i;
+        item.classList.add('dragging');
+        e.dataTransfer.setData('text/plain', String(i));
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      item.addEventListener('dragend', () => {
+        dragSourceIndex = null;
+        item.classList.remove('dragging');
+        document.querySelectorAll('.thumb-item').forEach(el => el.classList.remove('drop-before', 'drop-after'));
+      });
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if(dragSourceIndex === null || dragSourceIndex === i) return;
+        const rect = item.getBoundingClientRect();
+        const midX = rect.left + rect.width / 2;
+        const before = e.clientX < midX;
+        item.classList.toggle('drop-before', before);
+        item.classList.toggle('drop-after', !before);
+      });
+      item.addEventListener('dragleave', () => {
+        item.classList.remove('drop-before', 'drop-after');
+      });
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        item.classList.remove('drop-before', 'drop-after');
+        if(dragSourceIndex === null || dragSourceIndex === i) return;
+        const rect = item.getBoundingClientRect();
+        const midX = rect.left + rect.width / 2;
+        const before = e.clientX < midX;
+        const files = viewerGroup.files || [];
+        const newFiles = [...files];
+        const [moved] = newFiles.splice(dragSourceIndex, 1);
+        let insertIndex = before ? i : i + 1;
+        if(dragSourceIndex < i) insertIndex--;
+        newFiles.splice(insertIndex, 0, moved);
+        saveViewerFileOrder(newFiles, insertIndex);
+      });
+
+      thumbStrip.appendChild(item);
+    });
+  }
+
+  function showViewerImage(){
+    const files = viewerGroup.files || [];
+    const fn = files[viewerIndex];
+    stageImg.src = imgUrl(fn);
+    stageImg.alt = fn || "";
+    viewerCounter.textContent = (viewerIndex + 1) + ' / ' + files.length;
+    viewerFilename.textContent = fn || "";
+    Array.from(thumbStrip.children).forEach((el, i) => {
+      const img = el.querySelector('img');
+      if(img) img.classList.toggle('active', i === viewerIndex);
+    });
+  }
+
+  async function saveViewerFileOrder(newFiles, newIndex){
+    const fn = (viewerGroup.files || [])[0];
+    if(!fn) return;
+    try{
+      const res = await fetch('/api/groups/' + encodeURIComponent(fn) + '/files/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: newFiles })
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      viewerGroup.files = data.files;
+      viewerIndex = Math.max(0, Math.min(newIndex, viewerGroup.files.length - 1));
+      renderViewerChrome();
+    }catch(err){ alert('Could not reorder images: ' + err.message); }
+  }
+
+  function moveViewerFile(fromIndex, direction){
+    const files = viewerGroup.files || [];
+    if(files.length < 2) return;
+    const toIndex = direction === 'left' ? fromIndex - 1 : fromIndex + 1;
+    if(toIndex < 0 || toIndex >= files.length) return;
+    const newFiles = [...files];
+    const [moved] = newFiles.splice(fromIndex, 1);
+    newFiles.splice(toIndex, 0, moved);
+    saveViewerFileOrder(newFiles, toIndex);
+  }
+
+  function nextImage(){
+    const files = viewerGroup.files || [];
+    viewerIndex = (viewerIndex + 1) % files.length;
+    showViewerImage();
+  }
+  function prevImage(){
+    const files = viewerGroup.files || [];
+    viewerIndex = (viewerIndex - 1 + files.length) % files.length;
+    showViewerImage();
+  }
+
+  prevBtn.addEventListener('click', prevImage);
+  nextBtn.addEventListener('click', nextImage);
+  closeBtn.addEventListener('click', closeViewer);
+
+  function currentMode(){
+    if(addImagePanel.style.display === 'flex') return 'add-image-panel';
+    if(viewer.style.display === 'flex') return 'viewer';
+    if(showingUngrouped) return 'ungrouped';
+    return 'main';
+  }
+
+  function unselectMostRecentImage(){
+    if(selectedHistory.length === 0) return;
+    const fn = selectedHistory.pop();
+    selectedUngrouped.delete(fn);
+    renderUngroupedGrid();
+    updateUngroupedActionButtons();
+  }
+
+  function removeLastTag(){
+    if(activeTags.length === 0) return;
+    activeTags.pop();
+    renderChips();
+    buildTagSuggestions();
+    renderResults();
+  }
+
+  function isTypingTarget(el){
+    if(!el) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'ArrowRight' && currentMode() === 'viewer'){ nextImage(); return; }
+    if(e.key === 'ArrowLeft' && currentMode() === 'viewer'){ prevImage(); return; }
+    if(e.key !== 'Escape') return;
+    if(isTypingTarget(document.activeElement)) return;
+
+    const mode = currentMode();
+
+    if(mode === 'add-image-panel'){
+      addImagePanel.style.display = 'none';
+      return;
+    }
+
+    if(mode === 'viewer'){
+      closeViewer();
+      return;
+    }
+
+    if(mode === 'ungrouped'){
+      if(selectedUngrouped.size > 0){
+        unselectMostRecentImage();
+      } else {
+        setUngroupedView(false);
+      }
+      return;
+    }
+
+    // mode === 'main'
+    if(activeTags.length > 0){
+      removeLastTag();
+    }
+  });
+
+  let touchStartX = null;
+  viewer.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+  viewer.addEventListener('touchend', e => {
+    if(touchStartX === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if(Math.abs(dx) > 50){ dx > 0 ? prevImage() : nextImage(); }
+    touchStartX = null;
+  });
+
+  setNotesMode('preview');
+  loadArchive();
+  fetchAllImages();
+})();
+</script>
+</body>
+</html>
