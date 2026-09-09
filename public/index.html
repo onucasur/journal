@@ -21,6 +21,32 @@
     --serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
     --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    /* Translucent control colors. JS scales the alpha of these by the user's opacity setting.
+       Full rgba() values are stored (instead of just alphas) for maximum Safari compatibility. */
+    --btn-bg: rgba(255,255,255,0.25);
+    --btn-border: rgba(255,255,255,0.50);
+    --btn-hover-bg: rgba(255,255,255,0.35);
+    --add-pill-bg: rgba(30,30,35,0.85);
+    --add-pill-border: rgba(255,255,255,0.40);
+    --dark-control-bg: rgba(0,0,0,1.00);
+    --top-bar-gradient-start: rgba(0,0,0,1.00);
+    --bottom-bar-gradient-start: rgba(0,0,0,1.00);
+    --nav-zone-hover: rgba(255,255,255,0.10);
+    --header-bg: rgba(12,13,15,1.00);
+    --badge-bg: rgba(0,0,0,1.00);
+    --checkbox-bg: rgba(0,0,0,0.80);
+    --checkbox-border: rgba(255,255,255,1.00);
+    --tag-pill-bg: rgba(201,154,75,0.70);
+    --tag-pill-border: rgba(201,154,75,1.00);
+    --link-pill-news-bg: rgba(91,140,201,0.70);
+    --link-pill-news-border: rgba(91,140,201,1.00);
+    --link-pill-video-bg: rgba(201,91,140,0.70);
+    --link-pill-video-border: rgba(201,91,140,1.00);
+    --fullscreen-tag-bg: rgba(201,154,75,1.00);
+    --fullscreen-news-bg: rgba(91,140,201,1.00);
+    --fullscreen-video-bg: rgba(201,91,140,1.00);
+    --remove-hover-bg: rgba(201,107,75,0.50);
+    --add-hover-bg: rgba(201,154,75,0.50);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);}
@@ -35,7 +61,7 @@
 
   #archive{display:none;min-height:100vh;flex-direction:column;}
   header{
-    position:sticky;top:0;z-index:5;background:rgba(12,13,15,0.92);backdrop-filter:blur(6px);
+    position:sticky;top:0;z-index:5;background:var(--header-bg);backdrop-filter:blur(6px);
     border-bottom:1px solid var(--line);padding:18px 26px;display:flex;flex-direction:column;gap:14px;
   }
   .header-top{display:flex;align-items:center;flex-wrap:wrap;gap:14px;}
@@ -141,7 +167,7 @@
   .thumb-wrap{position:relative;aspect-ratio:16/10;background:#050506;overflow:hidden;}
   .thumb-wrap img{width:100%;height:100%;object-fit:cover;display:block;}
   .thumb-count{
-    position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.65);color:var(--text);
+    position:absolute;bottom:8px;right:8px;background:var(--badge-bg);color:var(--text);
     font-family:var(--mono);font-size:0.72rem;padding:2px 8px;border-radius:20px;
   }
   .card-actions{
@@ -149,7 +175,7 @@
   }
   .group-card:hover .card-actions{opacity:1;}
   .card-actions button{
-    background:rgba(0,0,0,0.65);color:var(--text);border:none;border-radius:4px;
+    background:var(--dark-control-bg);color:var(--text);border:none;border-radius:4px;
     width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;
     font-size:0.85rem;line-height:1;
   }
@@ -157,7 +183,7 @@
   .card-actions button.move-up:hover, .card-actions button.move-down:hover{background:var(--accent);color:#1a1305;}
   .card-drag-handle{
     position:absolute;top:8px;left:8px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;
-    background:rgba(0,0,0,0.6);border-radius:4px;color:var(--text);cursor:grab;font-size:0.85rem;line-height:1;
+    background:var(--dark-control-bg);border-radius:4px;color:var(--text);cursor:grab;font-size:0.85rem;line-height:1;
     opacity:0;transition:opacity .15s;
   }
   .group-card:hover .card-drag-handle{opacity:1;}
@@ -202,13 +228,13 @@
   }
   .ungrouped-card .checkbox{
     position:absolute;top:8px;left:8px;width:20px;height:20px;border-radius:4px;
-    border:2px solid rgba(255,255,255,0.6);background:rgba(0,0,0,0.4);
+    border:2px solid var(--checkbox-border);background:var(--checkbox-bg);
     display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;
   }
   .ungrouped-card.selected .checkbox{background:var(--accent);border-color:var(--accent);color:#1a1305;}
   .ungrouped-card .quick-add{
     position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:50%;
-    background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.3);color:#fff;
+    background:var(--dark-control-bg);border:1px solid var(--btn-border);color:#fff;
     display:flex;align-items:center;justify-content:center;font-size:0.95rem;cursor:pointer;
     opacity:0;transition:opacity .15s;
   }
@@ -216,7 +242,7 @@
   .ungrouped-card .quick-add:hover{background:var(--accent);color:#1a1305;border-color:var(--accent);}
   .ungrouped-card .delete-btn{
     position:absolute;top:8px;right:36px;width:24px;height:24px;border-radius:50%;
-    background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.3);color:var(--danger);
+    background:var(--dark-control-bg);border:1px solid var(--btn-border);color:var(--danger);
     display:flex;align-items:center;justify-content:center;font-size:0.85rem;cursor:pointer;
     opacity:0;transition:opacity .15s;
   }
@@ -227,7 +253,7 @@
   .viewer-stage{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
   .viewer-stage img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;user-select:none;-webkit-user-drag:none;}
   .nav-zone{position:absolute;top:0;bottom:0;width:16%;display:flex;align-items:center;background:transparent;border:none;cursor:pointer;transition:background .15s;}
-  .nav-zone:hover{background:rgba(255,255,255,0.04);}
+  .nav-zone:hover{background:var(--nav-zone-hover);}
   .nav-zone.left{left:0;justify-content:flex-start;padding-left:10px;}
   .nav-zone.right{right:0;justify-content:flex-end;padding-right:10px;}
   .nav-zone svg{opacity:0;width:28px;height:28px;transition:opacity .15s;}
@@ -235,7 +261,7 @@
 
   .viewer-topbar{
     position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;
-    padding:16px 20px;background:linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);z-index:2;pointer-events:none;
+    padding:16px 20px;background:linear-gradient(to bottom, var(--top-bar-gradient-start), transparent);z-index:2;pointer-events:none;
   }
   .viewer-topbar > *{pointer-events:auto;}
   .viewer-counter{font-family:var(--mono);font-size:0.8rem;color:rgba(255,255,255,0.85);}
@@ -243,20 +269,20 @@
   .viewer-topbar-left{display:flex;align-items:baseline;}
   .viewer-topbar-right{display:flex;align-items:center;gap:8px;}
   .close-btn{
-    background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#fff;
+    background:var(--dark-control-bg);border:1px solid var(--btn-border);color:#fff;
     width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:1rem;line-height:1;
   }
-  .close-btn:hover{background:rgba(255,255,255,0.18);}
+  .close-btn:hover{background:var(--btn-hover-bg);color:#1a1305;}
   .remove-btn{
-    background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:var(--danger);
+    background:var(--dark-control-bg);border:1px solid var(--btn-border);color:var(--danger);
     width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:1rem;line-height:1;
   }
-  .remove-btn:hover{background:rgba(201,107,75,0.25);}
+  .remove-btn:hover{background:var(--remove-hover-bg);color:#fff;}
   .add-btn{
-    background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:var(--accent);
+    background:var(--dark-control-bg);border:1px solid var(--btn-border);color:var(--accent);
     width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:1.2rem;line-height:1;
   }
-  .add-btn:hover{background:rgba(201,154,75,0.25);}
+  .add-btn:hover{background:var(--add-hover-bg);color:#1a1305;}
 
   #addImagePanel{
     display:none;position:absolute;left:0;right:0;bottom:0;max-height:45%;background:rgba(8,9,10,0.96);
@@ -292,7 +318,7 @@
 
   .viewer-bottombar{
     position:absolute;left:0;right:0;bottom:0;padding:16px 20px 20px;z-index:2;
-    background:linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+    background:linear-gradient(to top, var(--bottom-bar-gradient-start), transparent);
     display:flex;flex-direction:column;gap:10px;pointer-events:none;
   }
   .viewer-bottombar > *{pointer-events:auto;}
@@ -305,12 +331,12 @@
   .thumb-item img.active{opacity:1;border-color:var(--accent);}
   .thumb-item .thumb-drag-handle{
     position:absolute;top:2px;left:2px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;
-    background:rgba(0,0,0,0.6);border-radius:3px;color:#fff;font-size:0.75rem;line-height:1;cursor:grab;opacity:0;transition:opacity .15s;
+    background:var(--dark-control-bg);border-radius:3px;color:#fff;font-size:0.75rem;line-height:1;cursor:grab;opacity:0;transition:opacity .15s;
   }
   .thumb-item:hover .thumb-drag-handle{opacity:1;}
   .thumb-item .thumb-move{
     position:absolute;top:50%;transform:translateY(-50%);width:18px;height:18px;display:flex;align-items:center;justify-content:center;
-    background:rgba(0,0,0,0.6);border:none;border-radius:3px;color:#fff;font-size:0.75rem;cursor:pointer;opacity:0;transition:opacity .15s;
+    background:var(--dark-control-bg);border:none;border-radius:3px;color:#fff;font-size:0.75rem;cursor:pointer;opacity:0;transition:opacity .15s;
   }
   .thumb-item:hover .thumb-move{opacity:1;}
   .thumb-item .thumb-move.left{left:2px;}
@@ -323,27 +349,27 @@
   .viewer-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:28px;}
   .tag-pill{
     display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:0.72rem;color:#f0dab3;
-    background:rgba(201,154,75,0.32);padding:3px 6px 3px 10px;border-radius:20px;border:1px solid rgba(201,154,75,0.65);
+    background:var(--tag-pill-bg);padding:3px 6px 3px 10px;border-radius:20px;border:1px solid var(--tag-pill-border);
   }
   .tag-pill button{background:none;border:none;color:inherit;opacity:0.7;cursor:pointer;font-size:0.95rem;line-height:1;padding:0 2px;}
   .tag-pill button:hover{opacity:1;color:var(--danger);}
   .add-tag-pill{
-    display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.06);border:1px dashed rgba(255,255,255,0.25);
+    display:flex;align-items:center;gap:4px;background:var(--add-pill-bg);border:1px dashed var(--add-pill-border);
     border-radius:20px;padding:3px 10px;
   }
   .add-tag-pill input{
     background:none;border:none;color:#fff;font-family:var(--mono);font-size:0.72rem;width:90px;outline:none;
   }
-  .add-tag-pill input::placeholder{color:rgba(255,255,255,0.4);}
+  .add-tag-pill input::placeholder{color:rgba(255,255,255,0.65);}
   .add-tag-pill button{background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.85rem;padding:0;}
 
   /* Fullscreen viewer pills: more opaque background + white text for legibility
      against a photo, while keeping each pill's tint (amber/blue/pink) for
      at-a-glance category recognition. Card-grid pills keep their original
      look since they sit on a plain dark panel, not a photo. */
-  .tags-row .tag-pill{background:rgba(201,154,75,0.85);border-color:rgba(201,154,75,1);color:#fff;}
-  .news-row .link-pill.news{background:rgba(91,140,201,0.85);border-color:rgba(91,140,201,1);color:#fff;}
-  .videos-row .link-pill.video{background:rgba(201,91,140,0.85);border-color:rgba(201,91,140,1);color:#fff;}
+  .tags-row .tag-pill{background:var(--fullscreen-tag-bg);border-color:rgba(201,154,75,1);color:#fff;}
+  .news-row .link-pill.news{background:var(--fullscreen-news-bg);border-color:rgba(91,140,201,1);color:#fff;}
+  .videos-row .link-pill.video{background:var(--fullscreen-video-bg);border-color:rgba(201,91,140,1);color:#fff;}
 
   .viewer-links{display:flex;gap:8px;flex-wrap:wrap;}
   .link-pill{
@@ -352,29 +378,76 @@
   }
   .link-pill a{color:inherit;text-decoration:none;}
   .link-pill:hover{opacity:0.9;}
-  .link-pill.news{color:#fff;background:rgba(91,140,201,0.34);border-color:rgba(91,140,201,0.7);}
-  .link-pill.video{color:#fff;background:rgba(201,91,140,0.34);border-color:rgba(201,91,140,0.7);}
+  .link-pill.news{color:#fff;background:var(--link-pill-news-bg);border-color:var(--link-pill-news-border);}
+  .link-pill.video{color:#fff;background:var(--link-pill-video-bg);border-color:var(--link-pill-video-border);}
   .link-pill.disabled{opacity:0.35;pointer-events:none;}
   .link-pill button{background:none;border:none;color:inherit;opacity:0.7;cursor:pointer;font-size:0.95rem;line-height:1;padding:0 0 0 2px;}
   .link-pill button:hover{opacity:1;color:var(--danger);}
   .add-link-pill{
-    display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.08);border:1px dashed rgba(255,255,255,0.3);
+    display:flex;align-items:center;gap:4px;background:var(--add-pill-bg);border:1px dashed var(--add-pill-border);
     border-radius:20px;padding:3px 10px;
   }
   .add-link-pill input{
     background:none;border:none;color:#fff;font-family:var(--mono);font-size:0.72rem;width:150px;outline:none;
   }
-  .add-link-pill input::placeholder{color:rgba(255,255,255,0.4);}
+  .add-link-pill input::placeholder{color:rgba(255,255,255,0.65);}
   .news-slot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .videos-slot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .filter-toggle{
     display:inline-flex;align-items:center;gap:4px;
-    background:rgba(255,255,255,0.06);border:1px solid var(--line);border-radius:20px;
+    background:var(--btn-bg);border:1px solid var(--btn-border);border-radius:20px;
     padding:3px 10px;font-family:var(--mono);font-size:0.72rem;color:var(--text-dim);
     cursor:pointer;transition:all .15s;white-space:nowrap;
   }
-  .filter-toggle:hover{border-color:var(--accent);color:var(--accent);}
+  .filter-toggle:hover{background:var(--btn-hover-bg);border-color:var(--accent);color:var(--accent);}
   .filter-toggle.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+
+  .settings-panel{
+    width:min(480px, calc(100vw - 40px));background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    box-shadow:0 16px 48px rgba(0,0,0,0.5);display:flex;flex-direction:column;max-height:calc(100vh - 40px);
+  }
+  .settings-header{
+    display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);
+  }
+  .settings-header h2{margin:0;font-family:var(--serif);font-size:1.25rem;font-weight:400;color:var(--text);}
+  .settings-header button{
+    background:none;border:none;color:var(--text-dim);font-size:1.1rem;cursor:pointer;width:30px;height:30px;border-radius:4px;
+  }
+  .settings-header button:hover{background:var(--btn-hover-bg);color:var(--text);}
+  .settings-body{padding:18px 20px;display:flex;flex-direction:column;gap:18px;overflow:auto;}
+  .setting-row{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+    font-size:0.85rem;color:var(--text);
+  }
+  .setting-row > span:first-child{min-width:140px;}
+  .setting-value{font-family:var(--mono);color:var(--text-dim);min-width:42px;text-align:right;}
+  .setting-row input[type="range"]{flex:1;min-width:120px;accent-color:var(--accent);}
+  .setting-row input[type="number"]{
+    width:64px;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;color:var(--text);
+    padding:5px 8px;font-family:var(--mono);font-size:0.8rem;
+  }
+  .setting-row input[type="number"]:focus{outline:none;border-color:var(--accent);}
+  .setting-row input[type="number"]:disabled{opacity:0.4;cursor:not-allowed;}
+  .setting-row input[type="checkbox"]{
+    width:18px;height:18px;accent-color:var(--accent);cursor:pointer;
+  }
+  .setting-options{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .lookback-preset{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:20px;color:var(--text-dim);
+    padding:4px 12px;font-family:var(--mono);font-size:0.75rem;cursor:pointer;transition:all .15s;
+  }
+  .lookback-preset:hover{border-color:var(--accent);color:var(--accent);}
+  .lookback-preset.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+  .custom-lookback{display:flex;align-items:center;gap:6px;color:var(--text-dim);font-size:0.8rem;}
+
+  .settings-footer{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:14px 20px;border-top:1px solid var(--line);}
+  .apply-btn{
+    background:var(--accent);color:#1a1305;border:none;padding:8px 18px;border-radius:3px;
+    font-family:var(--sans);font-size:0.85rem;font-weight:600;cursor:pointer;transition:opacity .15s;
+  }
+  .apply-btn:hover:not(:disabled){opacity:0.88;}
+  .apply-btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .settings-status{font-family:var(--mono);font-size:0.75rem;color:var(--accent);min-height:1.2em;}
 
   @media (max-width:640px){
     header{padding:14px 16px;}
@@ -444,6 +517,10 @@
           <button class="rescan-btn" id="rescanBtn" title="Re-scan the images folder for new files">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-3-6.7M21 3v6h-6"/></svg>
             <span id="rescanLabel">Rescan</span>
+          </button>
+          <button class="rescan-btn" id="settingsBtn" title="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Settings</span>
           </button>
         </div>
       </div>
@@ -530,6 +607,53 @@
     </div>
   </div>
 
+  <div id="settingsDialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center;">
+    <div class="settings-panel">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button id="closeSettings" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="settings-body">
+        <label class="setting-row">
+          <span>Control opacity</span>
+          <input type="range" id="opacitySlider" min="0" max="100" value="100">
+          <span id="opacityValue" class="setting-value">100%</span>
+        </label>
+        <div class="setting-row">
+          <span>Default tag filter</span>
+          <div class="mode-toggle" id="settingsFilterToggle">
+            <button data-mode="or" id="settingsModeOr">OR</button>
+            <button data-mode="and" id="settingsModeAnd" class="active">AND</button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <span>News lookback</span>
+          <div class="setting-options">
+            <button class="lookback-preset" data-days="14">2w</button>
+            <button class="lookback-preset" data-days="21">3w</button>
+            <button class="lookback-preset" data-days="35">5w</button>
+            <label class="custom-lookback">
+              <input type="number" id="customLookback" min="1" max="365" value="14">
+              <span>days</span>
+            </label>
+          </div>
+        </div>
+        <label class="setting-row">
+          <span>Periodic rescan</span>
+          <div class="setting-options">
+            <input type="checkbox" id="periodicRescanEnabled">
+            <input type="number" id="periodicRescanMinutes" min="1" max="1440" value="30" disabled>
+            <span>min</span>
+          </div>
+        </label>
+      </div>
+      <div class="settings-footer">
+        <span id="settingsStatus" class="settings-status"></span>
+        <button id="applySettings" class="apply-btn">Apply</button>
+      </div>
+    </div>
+  </div>
+
 <script src="https://cdn.jsdelivr.net/npm/awesomplete@1.1.7/awesomplete.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js"></script>
@@ -539,7 +663,6 @@
 
   let archiveData = null;
   let currentResults = [];
-  let mode = "and";
   let activeTags = [];
   let dragSourceGroup = null;
   let viewerGroup = null;
@@ -549,14 +672,108 @@
   let selectedHistory = []; // LIFO order of image selections for Esc unselect
   let showingUngrouped = false;
   let allImages = []; // every image filename indexed on disk, for news-date suggestions
-  let newsDateFilter = (() => {
+
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+  const defaultSettings = {
+    controlOpacity: 100,           // 0-100; 100 = fully opaque controls
+    tagFilterMode: 'and',          // 'and' | 'or'
+    newsLookbackDays: 14,          // days
+    newsDateFilterEnabled: true,   // news date-window toggle in viewer
+    periodicRescanMinutes: 0       // 0 = disabled
+  };
+  let settings = { ...defaultSettings };
+  let mode = settings.tagFilterMode;
+  let newsDateFilter = settings.newsDateFilterEnabled;
+  let rescanIntervalId = null;
+
+  function loadSettings(){
     try {
-      const saved = localStorage.getItem('newsDateFilter');
-      return saved === null ? true : JSON.parse(saved);
-    } catch (e) {
-      return true;
+      const saved = localStorage.getItem('archiveSettings');
+      if(saved){
+        const parsed = JSON.parse(saved);
+        Object.assign(settings, parsed);
+      }
+    } catch(e) {}
+    // Clamp/normalize.
+    settings.controlOpacity = Math.max(0, Math.min(100, Number(settings.controlOpacity) || 100));
+    if(!['and','or'].includes(settings.tagFilterMode)) settings.tagFilterMode = 'and';
+    settings.newsLookbackDays = Math.max(1, Math.min(365, Number(settings.newsLookbackDays) || 14));
+    settings.newsDateFilterEnabled = settings.newsDateFilterEnabled !== false;
+    settings.periodicRescanMinutes = Math.max(0, Math.min(1440, Number(settings.periodicRescanMinutes) || 0));
+    mode = settings.tagFilterMode;
+    newsDateFilter = settings.newsDateFilterEnabled;
+  }
+
+  function saveSettings(){
+    try { localStorage.setItem('archiveSettings', JSON.stringify(settings)); } catch(e) {}
+  }
+
+  function rgba(r, g, b, a){
+    a = Math.max(0, Math.min(1, a));
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a.toFixed(3) + ')';
+  }
+
+  function applyControlOpacity(){
+    // 0% = fully transparent, 100% = maximum opacity for each control.
+    // Dark controls and tinted pills can reach full opacity; white translucent
+    // controls are capped lower so their text/icons remain readable.
+    const a = settings.controlOpacity / 100;
+    document.documentElement.style.setProperty('--btn-bg', rgba(255,255,255, 0.25 * a));
+    document.documentElement.style.setProperty('--btn-border', rgba(255,255,255, 0.50 * a));
+    document.documentElement.style.setProperty('--btn-hover-bg', rgba(255,255,255, 0.35 * a));
+    document.documentElement.style.setProperty('--add-pill-bg', rgba(30,30,35, 0.85 * a));
+    document.documentElement.style.setProperty('--add-pill-border', rgba(255,255,255, 0.40 * a));
+    document.documentElement.style.setProperty('--dark-control-bg', rgba(0,0,0, 1.00 * a));
+    document.documentElement.style.setProperty('--top-bar-gradient-start', rgba(0,0,0, 1.00 * a));
+    document.documentElement.style.setProperty('--bottom-bar-gradient-start', rgba(0,0,0, 1.00 * a));
+    document.documentElement.style.setProperty('--nav-zone-hover', rgba(255,255,255, 0.10 * a));
+    document.documentElement.style.setProperty('--header-bg', rgba(12,13,15, 1.00 * a));
+    document.documentElement.style.setProperty('--badge-bg', rgba(0,0,0, 1.00 * a));
+    document.documentElement.style.setProperty('--checkbox-bg', rgba(0,0,0, 0.80 * a));
+    document.documentElement.style.setProperty('--checkbox-border', rgba(255,255,255, 1.00 * a));
+    document.documentElement.style.setProperty('--tag-pill-bg', rgba(201,154,75, 0.70 * a));
+    document.documentElement.style.setProperty('--tag-pill-border', rgba(201,154,75, 1.00 * a));
+    document.documentElement.style.setProperty('--link-pill-news-bg', rgba(91,140,201, 0.70 * a));
+    document.documentElement.style.setProperty('--link-pill-news-border', rgba(91,140,201, 1.00 * a));
+    document.documentElement.style.setProperty('--link-pill-video-bg', rgba(201,91,140, 0.70 * a));
+    document.documentElement.style.setProperty('--link-pill-video-border', rgba(201,91,140, 1.00 * a));
+    document.documentElement.style.setProperty('--fullscreen-tag-bg', rgba(201,154,75, 1.00 * a));
+    document.documentElement.style.setProperty('--fullscreen-news-bg', rgba(91,140,201, 1.00 * a));
+    document.documentElement.style.setProperty('--fullscreen-video-bg', rgba(201,91,140, 1.00 * a));
+    document.documentElement.style.setProperty('--remove-hover-bg', rgba(201,107,75, 0.50 * a));
+    document.documentElement.style.setProperty('--add-hover-bg', rgba(201,154,75, 0.50 * a));
+  }
+
+  function applyTagFilterMode(){
+    mode = settings.tagFilterMode;
+    if(modeOrBtn) modeOrBtn.classList.toggle('active', mode === 'or');
+    if(modeAndBtn) modeAndBtn.classList.toggle('active', mode === 'and');
+    if(archiveData) renderResults();
+  }
+
+  function applyNewsLookback(){
+    // News lookback is read from settings.newsLookbackDays wherever NEWS_LOOKBACK_DAYS was used.
+    if(archiveData) renderResults();
+  }
+
+  function applyPeriodicRescan(){
+    if(rescanIntervalId){
+      clearInterval(rescanIntervalId);
+      rescanIntervalId = null;
     }
-  })(); // when false, suggest all news files without the 14-day window
+    if(settings.periodicRescanMinutes > 0){
+      rescanIntervalId = setInterval(doRescan, settings.periodicRescanMinutes * 60 * 1000);
+    }
+  }
+
+  function applySettings(){
+    applyControlOpacity();
+    applyTagFilterMode();
+    applyPeriodicRescan();
+    // News lookback is applied on next render of news suggestions.
+    if(archiveData) renderResults();
+  }
 
   const imgUrl = (filename) => filename ? ('/images/' + encodeURIComponent(filename)) : '';
 
@@ -569,9 +786,6 @@
     if(!m) return null;
     return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   }
-
-  const MS_PER_DAY = 24 * 60 * 60 * 1000;
-  const NEWS_LOOKBACK_DAYS = 14;
 
   async function fetchAllImages(){
     try{
@@ -1253,10 +1467,12 @@
 
 
   modeOrBtn.addEventListener('click', () => {
-    mode = "or"; modeOrBtn.classList.add('active'); modeAndBtn.classList.remove('active'); renderResults();
+    settings.tagFilterMode = "or";
+    applyTagFilterMode();
   });
   modeAndBtn.addEventListener('click', () => {
-    mode = "and"; modeAndBtn.classList.add('active'); modeOrBtn.classList.remove('active'); renderResults();
+    settings.tagFilterMode = "and";
+    applyTagFilterMode();
   });
 
   function escapeHtml(s){
@@ -1628,7 +1844,7 @@
       if(dateFilter){
         const inWindow = groupTimestamps.some(groupTs => {
           const daysBefore = (groupTs - candidateTs) / MS_PER_DAY;
-          return daysBefore >= 0 && daysBefore <= NEWS_LOOKBACK_DAYS;
+          return daysBefore >= 0 && daysBefore <= settings.newsLookbackDays;
         });
         if(!inWindow) return;
       }
@@ -1690,7 +1906,8 @@
       filterBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         newsDateFilter = !newsDateFilter;
-        try { localStorage.setItem('newsDateFilter', JSON.stringify(newsDateFilter)); } catch (err) {}
+        settings.newsDateFilterEnabled = newsDateFilter;
+        saveSettings();
         onChange();
       });
       container.appendChild(filterBtn);
@@ -1928,11 +2145,154 @@
   closeBtn.addEventListener('click', closeViewer);
 
   function currentMode(){
+    if(settingsDialog.style.display === 'flex') return 'settings';
     if(addImagePanel.style.display === 'flex') return 'add-image-panel';
     if(viewer.style.display === 'flex') return 'viewer';
     if(showingUngrouped) return 'ungrouped';
     return 'main';
   }
+
+  // -----------------------------------------------------------------
+  // Settings dialog
+  // -----------------------------------------------------------------
+  const settingsDialog = document.getElementById('settingsDialog');
+  const settingsBtn = document.getElementById('settingsBtn');
+  const closeSettings = document.getElementById('closeSettings');
+  const applySettingsBtn = document.getElementById('applySettings');
+  const settingsStatus = document.getElementById('settingsStatus');
+  const opacitySlider = document.getElementById('opacitySlider');
+  const opacityValue = document.getElementById('opacityValue');
+  const settingsModeOr = document.getElementById('settingsModeOr');
+  const settingsModeAnd = document.getElementById('settingsModeAnd');
+  const lookbackPresets = document.querySelectorAll('.lookback-preset');
+  const customLookback = document.getElementById('customLookback');
+  const periodicRescanEnabled = document.getElementById('periodicRescanEnabled');
+  const periodicRescanMinutes = document.getElementById('periodicRescanMinutes');
+  let stagedSettings = null;
+
+  function settingsChanged(){
+    if(!stagedSettings) return false;
+    return (
+      stagedSettings.controlOpacity !== settings.controlOpacity ||
+      stagedSettings.tagFilterMode !== settings.tagFilterMode ||
+      stagedSettings.newsLookbackDays !== settings.newsLookbackDays ||
+      stagedSettings.periodicRescanMinutes !== settings.periodicRescanMinutes ||
+      stagedSettings.newsDateFilterEnabled !== settings.newsDateFilterEnabled
+    );
+  }
+
+  function updateApplyButtonState(){
+    applySettingsBtn.disabled = !settingsChanged();
+  }
+
+  function updateLookbackPresets(){
+    if(!stagedSettings) return;
+    lookbackPresets.forEach(btn => {
+      const days = Number(btn.dataset.days);
+      btn.classList.toggle('active', days === stagedSettings.newsLookbackDays);
+    });
+    customLookback.value = stagedSettings.newsLookbackDays;
+  }
+
+  function openSettingsDialog(){
+    stagedSettings = { ...settings };
+    opacitySlider.value = stagedSettings.controlOpacity;
+    opacityValue.textContent = stagedSettings.controlOpacity + '%';
+    settingsModeOr.classList.toggle('active', stagedSettings.tagFilterMode === 'or');
+    settingsModeAnd.classList.toggle('active', stagedSettings.tagFilterMode === 'and');
+    updateLookbackPresets();
+    periodicRescanEnabled.checked = stagedSettings.periodicRescanMinutes > 0;
+    periodicRescanMinutes.disabled = stagedSettings.periodicRescanMinutes === 0;
+    periodicRescanMinutes.value = stagedSettings.periodicRescanMinutes > 0 ? stagedSettings.periodicRescanMinutes : 30;
+    settingsStatus.textContent = '';
+    updateApplyButtonState();
+    settingsDialog.style.display = 'flex';
+  }
+
+  function closeSettingsDialog(){
+    stagedSettings = null;
+    settingsDialog.style.display = 'none';
+  }
+
+  function applyDialogSettings(){
+    if(!stagedSettings) return;
+    settings = { ...stagedSettings };
+    saveSettings();
+    applySettings();
+    updateApplyButtonState();
+    settingsStatus.textContent = 'Applied';
+    setTimeout(() => {
+      if(settingsStatus.textContent === 'Applied') settingsStatus.textContent = '';
+    }, 1500);
+  }
+
+  settingsBtn.addEventListener('click', openSettingsDialog);
+  closeSettings.addEventListener('click', closeSettingsDialog);
+  applySettingsBtn.addEventListener('click', applyDialogSettings);
+  settingsDialog.addEventListener('click', (e) => {
+    if(e.target === settingsDialog) closeSettingsDialog();
+  });
+
+  opacitySlider.addEventListener('input', () => {
+    if(!stagedSettings) return;
+    stagedSettings.controlOpacity = Number(opacitySlider.value);
+    opacityValue.textContent = stagedSettings.controlOpacity + '%';
+    updateApplyButtonState();
+  });
+
+  settingsModeOr.addEventListener('click', () => {
+    if(!stagedSettings) return;
+    stagedSettings.tagFilterMode = 'or';
+    settingsModeOr.classList.add('active');
+    settingsModeAnd.classList.remove('active');
+    updateApplyButtonState();
+  });
+  settingsModeAnd.addEventListener('click', () => {
+    if(!stagedSettings) return;
+    stagedSettings.tagFilterMode = 'and';
+    settingsModeAnd.classList.add('active');
+    settingsModeOr.classList.remove('active');
+    updateApplyButtonState();
+  });
+
+  lookbackPresets.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if(!stagedSettings) return;
+      stagedSettings.newsLookbackDays = Number(btn.dataset.days);
+      updateLookbackPresets();
+      updateApplyButtonState();
+    });
+  });
+
+  customLookback.addEventListener('change', () => {
+    if(!stagedSettings) return;
+    let days = Number(customLookback.value);
+    days = Math.max(1, Math.min(365, days));
+    stagedSettings.newsLookbackDays = days;
+    updateLookbackPresets();
+    updateApplyButtonState();
+  });
+
+  periodicRescanEnabled.addEventListener('change', () => {
+    if(!stagedSettings) return;
+    periodicRescanMinutes.disabled = !periodicRescanEnabled.checked;
+    if(periodicRescanEnabled.checked){
+      let mins = Number(periodicRescanMinutes.value);
+      mins = Math.max(1, Math.min(1440, mins));
+      stagedSettings.periodicRescanMinutes = mins;
+    } else {
+      stagedSettings.periodicRescanMinutes = 0;
+    }
+    updateApplyButtonState();
+  });
+
+  periodicRescanMinutes.addEventListener('change', () => {
+    if(!stagedSettings || !periodicRescanEnabled.checked) return;
+    let mins = Number(periodicRescanMinutes.value);
+    mins = Math.max(1, Math.min(1440, mins));
+    stagedSettings.periodicRescanMinutes = mins;
+    updateApplyButtonState();
+  });
 
   function unselectMostRecentImage(){
     if(selectedHistory.length === 0) return;
@@ -1963,6 +2323,11 @@
     if(isTypingTarget(document.activeElement)) return;
 
     const mode = currentMode();
+
+    if(mode === 'settings'){
+      closeSettingsDialog();
+      return;
+    }
 
     if(mode === 'add-image-panel'){
       addImagePanel.style.display = 'none';
@@ -1998,6 +2363,8 @@
     touchStartX = null;
   });
 
+  loadSettings();
+  applySettings();
   setNotesMode('preview');
   loadArchive();
   fetchAllImages();
