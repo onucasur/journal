@@ -1558,12 +1558,13 @@
   }
 
   // Content shots follow "YYYY-MM-DD-NNN.png"-style sequential numbering;
-  // news clippings are typically a single dated file without that extra
-  // suffix (e.g. "2026-08-24.png", not "2026-08-24-001.png"). We anchor to
-  // the leading date and check what follows it, rather than matching
-  // "-<digits>" anywhere at the end — a plain dated file's day-of-month
-  // (e.g. the "24" in "2026-08-24.png") looks identical to a numbered
-  // suffix if matched naively, which would wrongly exclude it too.
+  // news clippings are either a single dated file without that extra suffix
+  // (e.g. "2026-08-24.png") or any file explicitly marked with "news" in
+  // its name (e.g. "Screenshot from 2026-09-08 08-13-09-news.png"). We
+  // anchor to the leading date and check what follows it, rather than
+  // matching "-<digits>" anywhere at the end — a plain dated file's
+  // day-of-month (e.g. the "24" in "2026-08-24.png") looks identical to a
+  // numbered suffix if matched naively, which would wrongly exclude it too.
   function hasSequentialSuffix(filename){
     const m = /^\d{4}-\d{2}-\d{2}(.*)\.png$/i.exec(filename || '');
     if(!m) return false; // no leading date to anchor against — leave filtering to the date-window check
@@ -1575,7 +1576,8 @@
   // it correctly handles crossing month and year boundaries, rather than
   // matching the filename's date prefix as a literal string. Excludes files
   // already in the group (those are content, not a news clipping), and
-  // excludes sequentially-numbered filenames for the same reason.
+  // excludes plain screenshots or sequentially-numbered filenames unless
+  // they are explicitly marked with "news" in their name.
   function suggestedNewsFiles(group){
     const groupTimestamps = (group.files || []).map(extractDateTs).filter(ts => ts !== null);
     if(groupTimestamps.length === 0) return [];
@@ -1583,14 +1585,18 @@
 
     return allImages.filter(fn => {
       if(groupFileSet.has(fn)) return false;
-      if(hasSequentialSuffix(fn)) return false;
-      if(/screenshot/i.test(fn)) return false;
       const candidateTs = extractDateTs(fn);
       if(candidateTs === null) return false;
-      return groupTimestamps.some(groupTs => {
+      const inWindow = groupTimestamps.some(groupTs => {
         const daysBefore = (groupTs - candidateTs) / MS_PER_DAY;
         return daysBefore >= 0 && daysBefore <= NEWS_LOOKBACK_DAYS;
       });
+      if(!inWindow) return false;
+      // Explicit news marker overrides screenshot/sequential-suffix filters.
+      if(/news/i.test(fn)) return true;
+      if(hasSequentialSuffix(fn)) return false;
+      if(/screenshot/i.test(fn)) return false;
+      return true;
     });
   }
 

@@ -206,7 +206,9 @@ const server = http.createServer(async (req, res) => {
     }
 
     // GET /api/ungrouped — images found on disk that aren't referenced by any
-    // group yet, either as content (`files`) or as a news clipping (`news`)
+    // group yet, either as content (`files`) or as a news clipping (`news`).
+    // Files whose names explicitly contain "news" are treated as news clippings
+    // even before they are assigned to a group, so they stay out of this grid.
     if (req.method === 'GET' && pathname === '/api/ungrouped') {
       const data = await readArchive();
       const referenced = new Set();
@@ -215,7 +217,7 @@ const server = http.createServer(async (req, res) => {
         if (g.news) referenced.add(g.news);
       });
       const ungrouped = Array.from(imageIndex.keys())
-        .filter(f => !referenced.has(f))
+        .filter(f => !referenced.has(f) && !/news/i.test(f))
         .sort((a, b) => a.localeCompare(b));
       return sendJson(res, 200, { files: ungrouped });
     }
