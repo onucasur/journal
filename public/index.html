@@ -367,6 +367,14 @@
   .add-link-pill input::placeholder{color:rgba(255,255,255,0.4);}
   .news-slot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .videos-slot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .filter-toggle{
+    display:inline-flex;align-items:center;gap:4px;
+    background:rgba(255,255,255,0.06);border:1px solid var(--line);border-radius:20px;
+    padding:3px 10px;font-family:var(--mono);font-size:0.72rem;color:var(--text-dim);
+    cursor:pointer;transition:all .15s;white-space:nowrap;
+  }
+  .filter-toggle:hover{border-color:var(--accent);color:var(--accent);}
+  .filter-toggle.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
 
   @media (max-width:640px){
     header{padding:14px 16px;}
@@ -541,6 +549,14 @@
   let selectedHistory = []; // LIFO order of image selections for Esc unselect
   let showingUngrouped = false;
   let allImages = []; // every image filename indexed on disk, for news-date suggestions
+  let newsDateFilter = (() => {
+    try {
+      const saved = localStorage.getItem('newsDateFilter');
+      return saved === null ? true : JSON.parse(saved);
+    } catch (e) {
+      return true;
+    }
+  })(); // when false, suggest all news files without the 14-day window
 
   const imgUrl = (filename) => filename ? ('/images/' + encodeURIComponent(filename)) : '';
 
@@ -1571,33 +1587,59 @@
     return /^-\d+$/.test(m[1]); // anything between the date and ".png"
   }
 
-  // Suggests images dated on the same day as, or up to NEWS_LOOKBACK_DAYS
-  // before, any of this group's own image dates — using real date math so
-  // it correctly handles crossing month and year boundaries, rather than
-  // matching the filename's date prefix as a literal string. Excludes files
-  // already in the group (those are content, not a news clipping), and
-  // excludes plain screenshots or sequentially-numbered filenames unless
-  // they are explicitly marked with "news" in their name.
-  function suggestedNewsFiles(group){
-    const groupTimestamps = (group.files || []).map(extractDateTs).filter(ts => ts !== null);
-    if(groupTimestamps.length === 0) return [];
-    const groupFileSet = new Set(group.files || []);
+  // Derives the paired news filename for a content file: "X.png" -> "X-news.png".
+  function pairedNewsFilename(contentFilename){
+    if(!contentFilename || !/\.png$/i.test(contentFilename)) return null;
+    return contentFilename.replace(/\.png$/i, '-news.png');
+  }
 
-    return allImages.filter(fn => {
-      if(groupFileSet.has(fn)) return false;
-      const candidateTs = extractDateTs(fn);
-      if(candidateTs === null) return false;
-      const inWindow = groupTimestamps.some(groupTs => {
-        const daysBefore = (groupTs - candidateTs) / MS_PER_DAY;
-        return daysBefore >= 0 && daysBefore <= NEWS_LOOKBACK_DAYS;
-      });
-      if(!inWindow) return false;
-      // Explicit news marker overrides screenshot/sequential-suffix filters.
-      if(/news/i.test(fn)) return true;
-      if(hasSequentialSuffix(fn)) return false;
-      if(/screenshot/i.test(fn)) return false;
-      return true;
+  // Suggests news clippings for a group.
+  // 1. Exact filename pairs: for every content file "X.png", suggest "X-news.png"
+  //    if it exists on disk. This pairs screenshot-style content with its
+  //    corresponding news clipping even when many screenshots share a date.
+  // 2. Date-window fallback (when dateFilter is true): images dated on the same
+  //    day as, or up to NEWS_LOOKBACK_DAYS before, any of the group's own image
+  //    dates. When dateFilter is false, the date restriction is removed and all
+  //    files that look like news clippings are suggested.
+  // Excludes files already in the group, plain screenshots, and
+  // sequentially-numbered filenames unless they are explicitly marked
+  // with "news" in their name.
+  function suggestedNewsFiles(group, dateFilter = true){
+    const groupFiles = group.files || [];
+    const groupTimestamps = groupFiles.map(extractDateTs).filter(ts => ts !== null);
+    if(dateFilter && groupTimestamps.length === 0) return [];
+    const groupFileSet = new Set(groupFiles);
+    const imageSet = new Set(allImages);
+    const suggested = new Set();
+
+    // 1. Exact filename pairs always suggested.
+    groupFiles.forEach(fn => {
+      const newsFn = pairedNewsFilename(fn);
+      if(newsFn && imageSet.has(newsFn) && !groupFileSet.has(newsFn)){
+        suggested.add(newsFn);
+      }
     });
+
+    // 2. Date-filtered or all-news suggestions.
+    allImages.forEach(fn => {
+      if(suggested.has(fn) || groupFileSet.has(fn)) return;
+      const candidateTs = extractDateTs(fn);
+      if(candidateTs === null) return;
+      if(dateFilter){
+        const inWindow = groupTimestamps.some(groupTs => {
+          const daysBefore = (groupTs - candidateTs) / MS_PER_DAY;
+          return daysBefore >= 0 && daysBefore <= NEWS_LOOKBACK_DAYS;
+        });
+        if(!inWindow) return;
+      }
+      // Explicit news marker overrides screenshot/sequential-suffix filters.
+      if(/news/i.test(fn)) return suggested.add(fn);
+      if(hasSequentialSuffix(fn)) return;
+      if(/screenshot/i.test(fn)) return;
+      suggested.add(fn);
+    });
+
+    return Array.from(suggested).sort((a, b) => a.localeCompare(b));
   }
 
   // Renders the news field as an editable pill (with a remove button when
@@ -1637,9 +1679,21 @@
 
       attachAwesomplete(
         input,
-        suggestedNewsFiles(group),
+        suggestedNewsFiles(group, newsDateFilter),
         (value) => setGroupNews(group, value, onChange)
       );
+
+      const filterBtn = document.createElement('button');
+      filterBtn.className = 'filter-toggle' + (newsDateFilter ? ' active' : '');
+      filterBtn.title = newsDateFilter ? 'Showing news within 14 days' : 'Showing all news files';
+      filterBtn.textContent = newsDateFilter ? '14d' : 'all';
+      filterBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        newsDateFilter = !newsDateFilter;
+        try { localStorage.setItem('newsDateFilter', JSON.stringify(newsDateFilter)); } catch (err) {}
+        onChange();
+      });
+      container.appendChild(filterBtn);
     }
   }
 
