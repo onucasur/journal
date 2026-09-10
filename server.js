@@ -153,12 +153,15 @@ async function gitCheckUpdate() {
   await gitFetch();
   const localCommit = await gitCurrentCommit();
   const remoteCommit = await gitUpstreamCommit();
-  const needsUpdate = localCommit !== remoteCommit;
+  // An update is only available when the remote is strictly ahead of local.
+  // Using the commit log count avoids false positives when local has unpushed
+  // commits (in which case HEAD..upstream is empty).
+  const commits = await gitLogPending();
   return {
-    needsUpdate,
+    needsUpdate: commits.length > 0,
     localCommit,
     remoteCommit,
-    commits: needsUpdate ? await gitLogPending() : []
+    commits
   };
 }
 
@@ -332,7 +335,7 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, { updated: false, message: 'Already up to date', ...status });
         }
         const pull = await gitPull();
-        return sendJson(res, 200, { updated: true, message: 'Update pulled. Restart the server to use it.', output: pull.output });
+        return sendJson(res, 200, { updated: true, message: 'Updated, restart server to use it.', output: pull.output });
       } catch (err) {
         return sendJson(res, 500, { error: err.message });
       }
