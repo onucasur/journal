@@ -676,7 +676,7 @@
           <span>Update status</span>
           <div class="setting-options">
             <span id="updateStatusText" class="settings-status">—</span>
-            <button id="updateCommitsBtn" class="info-btn" title="Show pending commits" style="display:none;">?</button>
+            <button id="updateCommitsBtn" class="info-btn" title="Pending Changes" style="display:none;">?</button>
             <button id="updateNowBtn" class="apply-btn" style="padding:6px 14px;font-size:0.8rem;">Update now</button>
           </div>
         </div>
@@ -859,7 +859,7 @@
       const data = await res.json();
       if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
       if(data.needsUpdate){
-        statusEl.textContent = 'Update available (' + data.localCommit.slice(0,7) + ' \u2192 ' + data.remoteCommit.slice(0,7) + ')';
+        statusEl.textContent = 'Update available';
         statusEl.style.color = 'var(--accent)';
         pendingCommits = Array.isArray(data.commits) ? data.commits : [];
         if(infoBtn) infoBtn.style.display = '';
@@ -883,7 +883,7 @@
     }
     listEl.innerHTML = '';
     if(pendingCommits.length === 0){
-      listEl.innerHTML = '<em style="color:var(--text-dim)">No pending commits.</em>';
+      listEl.innerHTML = '<em style="color:var(--text-dim)">No pending changes.</em>';
     } else {
       const ul = document.createElement('ul');
       pendingCommits.forEach(c => {
@@ -2469,6 +2469,7 @@
     updateApplyButtonState();
   });
   updateNowBtn.addEventListener('click', updateAppNow);
+
   const updateCommitsBtn = document.getElementById('updateCommitsBtn');
   if(updateCommitsBtn) updateCommitsBtn.addEventListener('click', renderPendingCommits);
 

@@ -18,7 +18,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const { URL } = require('url');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const util = require('util');
 
 const execAsync = util.promisify(exec);
@@ -179,12 +179,25 @@ async function applyAutoUpdate() {
       console.log(`Update available (${status.localCommit.slice(0, 7)} -> ${status.remoteCommit.slice(0, 7)}). Pulling...`);
       const pull = await gitPull();
       console.log('Pulled update.' + (pull.output ? '\n' + pull.output : ''));
+      console.log('Restarting server to run the update...');
+      restartServerProcess();
+      process.exit(0);
     } else {
       console.log('No application update available.');
     }
   } catch (err) {
     console.error('Auto-update failed:', err.message);
   }
+}
+
+function restartServerProcess() {
+  const child = spawn(process.argv[0], process.argv.slice(1), {
+    detached: true,
+    stdio: 'ignore',
+    cwd: process.cwd(),
+    env: process.env
+  });
+  child.unref();
 }
 
 // ---------------------------------------------------------------------
@@ -327,7 +340,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    // POST /api/update/now — pull the latest application code from git
+    // POST /api/update/now — pull the latest application code from git and restart
     if (req.method === 'POST' && pathname === '/api/update/now') {
       try {
         const status = await gitCheckUpdate();
@@ -335,7 +348,11 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, { updated: false, message: 'Already up to date', ...status });
         }
         const pull = await gitPull();
-        return sendJson(res, 200, { updated: true, message: 'Updated, restart server to use it.', output: pull.output });
+        restartServerProcess();
+        sendJson(res, 200, { updated: true, message: 'Updated and restarting server.', output: pull.output });
+        // Allow the response to flush before exiting.
+        setTimeout(() => process.exit(0), 200);
+        return;
       } catch (err) {
         return sendJson(res, 500, { error: err.message });
       }
