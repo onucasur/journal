@@ -403,7 +403,7 @@
   .filter-toggle.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
 
   .settings-panel{
-    width:min(480px, calc(100vw - 40px));background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    width:min(620px, calc(100vw - 40px));background:var(--panel);border:1px solid var(--line);border-radius:8px;
     box-shadow:0 16px 48px rgba(0,0,0,0.5);display:flex;flex-direction:column;max-height:calc(100vh - 40px);
   }
   .settings-header{
@@ -448,6 +448,22 @@
   .apply-btn:hover:not(:disabled){opacity:0.88;}
   .apply-btn:disabled{opacity:0.4;cursor:not-allowed;}
   .settings-status{font-family:var(--mono);font-size:0.75rem;color:var(--accent);min-height:1.2em;}
+  .info-btn{
+    width:18px;height:18px;border-radius:50%;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text-dim);
+    display:flex;align-items:center;justify-content:center;font-size:0.75rem;line-height:1;cursor:pointer;
+    transition:border-color .15s,color .15s;flex-shrink:0;
+  }
+  .info-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .commits-popover{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
+    padding:10px 12px;max-width:420px;max-height:240px;overflow:auto;
+    font-family:var(--mono);font-size:0.72rem;color:var(--text);
+    box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  }
+  .commits-popover ul{margin:0;padding-left:1.2em;}
+  .commits-popover li{margin-bottom:4px;}
+  .commits-popover li code{background:var(--panel);padding:1px 4px;border-radius:3px;color:var(--accent);}
 
   @media (max-width:640px){
     header{padding:14px 16px;}
@@ -645,6 +661,29 @@
             <span>min</span>
           </div>
         </label>
+        <div class="setting-row">
+          <span>App updates</span>
+          <div class="setting-options">
+            <div class="mode-toggle" id="updateToggle">
+              <button data-mode="off" id="updateOff" class="active">Off</button>
+              <button data-mode="restart" id="updateRestart">On restart</button>
+            </div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <span>Update status</span>
+          <div class="setting-options">
+            <span id="updateStatusText" class="settings-status">—</span>
+            <button id="updateCommitsBtn" class="info-btn" title="Show pending commits" style="display:none;">?</button>
+            <button id="updateNowBtn" class="apply-btn" style="padding:6px 14px;font-size:0.8rem;">Update now</button>
+          </div>
+        </div>
+        <div class="setting-row" id="updateCommitsRow" style="display:none;">
+          <span></span>
+          <div class="setting-options">
+            <div id="updateCommitsList" class="commits-popover"></div>
+          </div>
+        </div>
       </div>
       <div class="settings-footer">
         <span id="settingsStatus" class="settings-status"></span>
@@ -772,6 +811,113 @@
     applyPeriodicRescan();
     // News lookback is applied on next render of news suggestions.
     if(archiveData) renderResults();
+  }
+
+  // ---------------------------------------------------------------------
+  // Server-side application settings and git updates
+  // ---------------------------------------------------------------------
+  let serverSettings = { autoUpdate: 'off' };
+  let pendingCommits = [];
+
+  async function loadServerSettings(){
+    try{
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      serverSettings = { autoUpdate: 'off', ...data };
+      if(!['off','restart'].includes(serverSettings.autoUpdate)) serverSettings.autoUpdate = 'off';
+    }catch(err){
+      console.error('Could not load server settings:', err);
+    }
+  }
+
+  async function saveServerSettings(settings){
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings)
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    return data;
+  }
+
+  async function checkUpdateStatus(){
+    const statusEl = document.getElementById('updateStatusText');
+    const infoBtn = document.getElementById('updateCommitsBtn');
+    const commitsRow = document.getElementById('updateCommitsRow');
+    if(!statusEl) return;
+    statusEl.textContent = 'Checking\u2026';
+    statusEl.style.color = 'var(--text-dim)';
+    pendingCommits = [];
+    if(infoBtn) infoBtn.style.display = 'none';
+    if(commitsRow) commitsRow.style.display = 'none';
+    try{
+      const res = await fetch('/api/update/status');
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      if(data.needsUpdate){
+        statusEl.textContent = 'Update available (' + data.localCommit.slice(0,7) + ' \u2192 ' + data.remoteCommit.slice(0,7) + ')';
+        statusEl.style.color = 'var(--accent)';
+        pendingCommits = Array.isArray(data.commits) ? data.commits : [];
+        if(infoBtn) infoBtn.style.display = '';
+      } else {
+        statusEl.textContent = 'Up to date (' + data.localCommit.slice(0,7) + ')';
+        statusEl.style.color = 'var(--text-dim)';
+      }
+    }catch(err){
+      statusEl.textContent = 'Could not check: ' + err.message;
+      statusEl.style.color = 'var(--danger)';
+    }
+  }
+
+  function renderPendingCommits(){
+    const listEl = document.getElementById('updateCommitsList');
+    const rowEl = document.getElementById('updateCommitsRow');
+    if(!listEl || !rowEl) return;
+    if(rowEl.style.display === 'block'){
+      rowEl.style.display = 'none';
+      return;
+    }
+    listEl.innerHTML = '';
+    if(pendingCommits.length === 0){
+      listEl.innerHTML = '<em style="color:var(--text-dim)">No pending commits.</em>';
+    } else {
+      const ul = document.createElement('ul');
+      pendingCommits.forEach(c => {
+        const li = document.createElement('li');
+        li.innerHTML = '<code>' + escapeHtml(c.hash.slice(0,7)) + '</code> ' + escapeHtml(c.message);
+        ul.appendChild(li);
+      });
+      listEl.appendChild(ul);
+    }
+    rowEl.style.display = 'block';
+  }
+
+  async function updateAppNow(){
+    const btn = document.getElementById('updateNowBtn');
+    const statusEl = document.getElementById('updateStatusText');
+    if(btn) btn.disabled = true;
+    if(statusEl){
+      statusEl.textContent = 'Updating…';
+      statusEl.style.color = 'var(--text-dim)';
+    }
+    try{
+      const res = await fetch('/api/update/now', { method: 'POST' });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      if(statusEl){
+        statusEl.textContent = data.updated ? data.message : (data.message + ' (' + data.localCommit.slice(0,7) + ')');
+        statusEl.style.color = data.updated ? 'var(--accent)' : 'var(--text-dim)';
+      }
+    }catch(err){
+      if(statusEl){
+        statusEl.textContent = 'Update failed: ' + err.message;
+        statusEl.style.color = 'var(--danger)';
+      }
+    }finally{
+      if(btn) btn.disabled = false;
+    }
   }
 
   const imgUrl = (filename) => filename ? ('/images/' + encodeURIComponent(filename)) : '';
@@ -2170,16 +2316,20 @@
   const customLookback = document.getElementById('customLookback');
   const periodicRescanEnabled = document.getElementById('periodicRescanEnabled');
   const periodicRescanMinutes = document.getElementById('periodicRescanMinutes');
+  const updateOff = document.getElementById('updateOff');
+  const updateRestart = document.getElementById('updateRestart');
   let stagedSettings = null;
+  let stagedServerSettings = null;
 
   function settingsChanged(){
-    if(!stagedSettings) return false;
+    if(!stagedSettings || !stagedServerSettings) return false;
     return (
       stagedSettings.controlOpacity !== settings.controlOpacity ||
       stagedSettings.tagFilterMode !== settings.tagFilterMode ||
       stagedSettings.newsLookbackDays !== settings.newsLookbackDays ||
       stagedSettings.periodicRescanMinutes !== settings.periodicRescanMinutes ||
-      stagedSettings.newsDateFilterEnabled !== settings.newsDateFilterEnabled
+      stagedSettings.newsDateFilterEnabled !== settings.newsDateFilterEnabled ||
+      stagedServerSettings.autoUpdate !== serverSettings.autoUpdate
     );
   }
 
@@ -2198,6 +2348,7 @@
 
   function openSettingsDialog(){
     stagedSettings = { ...settings };
+    stagedServerSettings = { ...serverSettings };
     opacitySlider.value = stagedSettings.controlOpacity;
     opacityValue.textContent = stagedSettings.controlOpacity + '%';
     settingsModeOr.classList.toggle('active', stagedSettings.tagFilterMode === 'or');
@@ -2206,25 +2357,35 @@
     periodicRescanEnabled.checked = stagedSettings.periodicRescanMinutes > 0;
     periodicRescanMinutes.disabled = stagedSettings.periodicRescanMinutes === 0;
     periodicRescanMinutes.value = stagedSettings.periodicRescanMinutes > 0 ? stagedSettings.periodicRescanMinutes : 30;
+    updateOff.classList.toggle('active', stagedServerSettings.autoUpdate === 'off');
+    updateRestart.classList.toggle('active', stagedServerSettings.autoUpdate === 'restart');
     settingsStatus.textContent = '';
     updateApplyButtonState();
+    checkUpdateStatus();
     settingsDialog.style.display = 'flex';
   }
 
   function closeSettingsDialog(){
     stagedSettings = null;
+    stagedServerSettings = null;
     settingsDialog.style.display = 'none';
   }
 
-  function applyDialogSettings(){
-    if(!stagedSettings) return;
+  async function applyDialogSettings(){
+    if(!stagedSettings || !stagedServerSettings) return;
     settings = { ...stagedSettings };
+    serverSettings = { ...stagedServerSettings };
     saveSettings();
+    try{
+      await saveServerSettings(serverSettings);
+      settingsStatus.textContent = 'Applied';
+    }catch(err){
+      settingsStatus.textContent = 'Save failed: ' + err.message;
+    }
     applySettings();
     updateApplyButtonState();
-    settingsStatus.textContent = 'Applied';
     setTimeout(() => {
-      if(settingsStatus.textContent === 'Applied') settingsStatus.textContent = '';
+      if(settingsStatus.textContent === 'Applied' || settingsStatus.textContent.startsWith('Save failed')) settingsStatus.textContent = '';
     }, 1500);
   }
 
@@ -2295,6 +2456,24 @@
     stagedSettings.periodicRescanMinutes = mins;
     updateApplyButtonState();
   });
+
+  updateOff.addEventListener('click', () => {
+    if(!stagedServerSettings) return;
+    stagedServerSettings.autoUpdate = 'off';
+    updateOff.classList.add('active');
+    updateRestart.classList.remove('active');
+    updateApplyButtonState();
+  });
+  updateRestart.addEventListener('click', () => {
+    if(!stagedServerSettings) return;
+    stagedServerSettings.autoUpdate = 'restart';
+    updateRestart.classList.add('active');
+    updateOff.classList.remove('active');
+    updateApplyButtonState();
+  });
+  updateNowBtn.addEventListener('click', updateAppNow);
+  const updateCommitsBtn = document.getElementById('updateCommitsBtn');
+  if(updateCommitsBtn) updateCommitsBtn.addEventListener('click', renderPendingCommits);
 
   function unselectMostRecentImage(){
     if(selectedHistory.length === 0) return;
@@ -2367,6 +2546,7 @@
 
   loadSettings();
   applySettings();
+  loadServerSettings();
   setNotesMode('preview');
   loadArchive();
   fetchAllImages();

@@ -18,12 +18,17 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const { URL } = require('url');
+const { exec } = require('child_process');
+const util = require('util');
+
+const execAsync = util.promisify(exec);
 
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.resolve(process.env.DATA_FILE || path.join(__dirname, 'data.json'));
 const NOTES_FILE = path.join(path.dirname(DATA_FILE), 'notes.md');
 const IMAGES_DIR = path.resolve(process.env.IMAGES_DIR || path.join(__dirname, 'images'));
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const SETTINGS_FILE = path.join(__dirname, 'settings.json');
 
 // ---------------------------------------------------------------------
 // In-memory index of filename -> absolute path, built by scanning
@@ -79,6 +84,104 @@ async function writeArchive(data) {
   const tmp = DATA_FILE + '.tmp';
   await fsp.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
   await fsp.rename(tmp, DATA_FILE);
+}
+
+// ---------------------------------------------------------------------
+// Server-side application settings (stored in the repo, not in DATA_FILE)
+// ---------------------------------------------------------------------
+async function readSettings() {
+  try {
+    const text = await fsp.readFile(SETTINGS_FILE, 'utf8');
+    const parsed = JSON.parse(text);
+    if (!['off', 'restart'].includes(parsed.autoUpdate)) parsed.autoUpdate = 'off';
+    return parsed;
+  } catch (err) {
+    if (err.code === 'ENOENT') return { autoUpdate: 'off' };
+    throw err;
+  }
+}
+
+async function writeSettings(settings) {
+  const tmp = SETTINGS_FILE + '.tmp';
+  await fsp.writeFile(tmp, JSON.stringify(settings, null, 2), 'utf8');
+  await fsp.rename(tmp, SETTINGS_FILE);
+}
+
+// ---------------------------------------------------------------------
+// Git helpers for checking / pulling application updates
+// ---------------------------------------------------------------------
+async function gitFetch() {
+  await execAsync('git fetch', { cwd: __dirname });
+}
+
+async function gitCurrentCommit() {
+  const { stdout } = await execAsync('git rev-parse HEAD', { cwd: __dirname });
+  return stdout.trim();
+}
+
+async function gitUpstreamCommit() {
+  try {
+    const { stdout } = await execAsync('git rev-parse @{upstream}', { cwd: __dirname });
+    return stdout.trim();
+  } catch (err) {
+    const { stdout: branch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: __dirname });
+    const { stdout } = await execAsync(`git rev-parse origin/${branch.trim()}`, { cwd: __dirname });
+    return stdout.trim();
+  }
+}
+
+async function gitLogPending() {
+  try {
+    const { stdout } = await execAsync('git log HEAD..@{upstream} --oneline', { cwd: __dirname });
+    return parseGitLog(stdout);
+  } catch (err) {
+    const { stdout: branch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: __dirname });
+    const { stdout } = await execAsync(`git log HEAD..origin/${branch.trim()} --oneline`, { cwd: __dirname });
+    return parseGitLog(stdout);
+  }
+}
+
+function parseGitLog(stdout) {
+  return stdout.trim().split('\n').filter(Boolean).map(line => {
+    const hash = line.split(' ')[0];
+    const message = line.slice(hash.length).trim();
+    return { hash, message };
+  });
+}
+
+async function gitCheckUpdate() {
+  await gitFetch();
+  const localCommit = await gitCurrentCommit();
+  const remoteCommit = await gitUpstreamCommit();
+  const needsUpdate = localCommit !== remoteCommit;
+  return {
+    needsUpdate,
+    localCommit,
+    remoteCommit,
+    commits: needsUpdate ? await gitLogPending() : []
+  };
+}
+
+async function gitPull() {
+  const { stdout, stderr } = await execAsync('git pull', { cwd: __dirname });
+  return { output: (stdout + stderr).trim() };
+}
+
+async function applyAutoUpdate() {
+  try {
+    const settings = await readSettings();
+    if (settings.autoUpdate !== 'restart') return;
+    const status = await gitCheckUpdate();
+    if (status.needsUpdate) {
+      console.log(`Update available (${status.localCommit.slice(0, 7)} -> ${status.remoteCommit.slice(0, 7)}). Pulling...`);
+      const pull = await gitPull();
+      console.log('Pulled update.' + (pull.output ? '\n' + pull.output : ''));
+    } else {
+      console.log('No application update available.');
+    }
+  } catch (err) {
+    console.error('Auto-update failed:', err.message);
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -191,6 +294,48 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && pathname === '/api/data') {
       const data = await readArchive();
       return sendJson(res, 200, data);
+    }
+
+    // GET /api/settings — server-side application settings
+    if (req.method === 'GET' && pathname === '/api/settings') {
+      const settings = await readSettings();
+      return sendJson(res, 200, settings);
+    }
+
+    // POST /api/settings — update server-side application settings
+    if (req.method === 'POST' && pathname === '/api/settings') {
+      const body = await readBody(req);
+      const current = await readSettings();
+      const updated = { ...current };
+      if (['off', 'restart'].includes(body.autoUpdate)) {
+        updated.autoUpdate = body.autoUpdate;
+      }
+      await writeSettings(updated);
+      return sendJson(res, 200, updated);
+    }
+
+    // GET /api/update/status — check whether a git update is available
+    if (req.method === 'GET' && pathname === '/api/update/status') {
+      try {
+        const status = await gitCheckUpdate();
+        return sendJson(res, 200, status);
+      } catch (err) {
+        return sendJson(res, 500, { error: err.message });
+      }
+    }
+
+    // POST /api/update/now — pull the latest application code from git
+    if (req.method === 'POST' && pathname === '/api/update/now') {
+      try {
+        const status = await gitCheckUpdate();
+        if (!status.needsUpdate) {
+          return sendJson(res, 200, { updated: false, message: 'Already up to date', ...status });
+        }
+        const pull = await gitPull();
+        return sendJson(res, 200, { updated: true, message: 'Update pulled. Restart the server to use it.', output: pull.output });
+      } catch (err) {
+        return sendJson(res, 500, { error: err.message });
+      }
     }
 
     // GET /images/:filename
@@ -565,10 +710,14 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-rescanImages().then((count) => {
+async function startServer() {
+  await applyAutoUpdate();
+  const count = await rescanImages();
   server.listen(PORT, () => {
     console.log(`Archive Viewer running at http://localhost:${PORT}`);
     console.log(`  data file:   ${DATA_FILE}`);
     console.log(`  images dir:  ${IMAGES_DIR}  (${count} PNGs found)`);
   });
-});
+}
+
+startServer();
