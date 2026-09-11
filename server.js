@@ -4,14 +4,16 @@
 // images straight from a folder on disk — no browser file pickers,
 // no permission prompts, no re-selecting anything on refresh.
 //
-// Configure via environment variables (or just edit the defaults below):
+// Configuration is read from a git-ignored .env file in the repo root.
+// On first run .env does not exist; the frontend shows a setup dialog
+// that writes .env and restarts the server via the watchdog.
+//
 //   DATA_FILE  - path to your data.json index file
 //   IMAGES_DIR - path to the folder containing the PNGs (searched recursively)
 //   PORT       - port to listen on (default 3000)
 //
 // Run:
-//   node server.js
-//   DATA_FILE=/path/to/data.json IMAGES_DIR=/path/to/images node server.js
+//   ./watchdog.sh
 
 const http = require('http');
 const fs = require('fs');
@@ -23,16 +25,43 @@ const util = require('util');
 
 const execAsync = util.promisify(exec);
 
-const PORT = process.env.PORT || 3000;
-const DATA_FILE = path.resolve(process.env.DATA_FILE || path.join(__dirname, 'data.json'));
-const NOTES_FILE = path.join(path.dirname(DATA_FILE), 'notes.md');
-const IMAGES_DIR = path.resolve(process.env.IMAGES_DIR || path.join(__dirname, 'images'));
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const SETTINGS_FILE = path.join(__dirname, 'settings.json');
 const ENV_FILE = path.join(__dirname, '.env');
 const RESTART_MARKER = path.join(__dirname, '.restart-marker');
 const SAMPLE_DATA_FILE = path.join(__dirname, 'sample-data', 'data.json');
 const SAMPLE_IMAGES_DIR = path.join(__dirname, 'sample-data', 'images');
+
+function parseEnv(text) {
+  const env = {};
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const idx = trimmed.indexOf('=');
+    if (idx === -1) continue;
+    const key = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim();
+    env[key] = value;
+  }
+  return env;
+}
+
+function readEnvSync() {
+  try {
+    return parseEnv(fs.readFileSync(ENV_FILE, 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return {};
+    throw err;
+  }
+}
+
+const envFromFile = readEnvSync();
+const isConfigured = !!(envFromFile.DATA_FILE && envFromFile.IMAGES_DIR);
+
+const PORT = process.env.PORT || envFromFile.PORT || 3000;
+const DATA_FILE = isConfigured ? path.resolve(envFromFile.DATA_FILE) : null;
+const IMAGES_DIR = isConfigured ? path.resolve(envFromFile.IMAGES_DIR) : null;
+const NOTES_FILE = DATA_FILE ? path.join(path.dirname(DATA_FILE), 'notes.md') : null;
 
 // ---------------------------------------------------------------------
 // In-memory index of filename -> absolute path, built by scanning
@@ -61,7 +90,7 @@ async function buildImageIndex(dir, into) {
 
 async function rescanImages() {
   const fresh = new Map();
-  await buildImageIndex(IMAGES_DIR, fresh);
+  if (IMAGES_DIR) await buildImageIndex(IMAGES_DIR, fresh);
   imageIndex = fresh;
   return imageIndex.size;
 }
@@ -70,6 +99,9 @@ async function rescanImages() {
 // data.json read/write helpers
 // ---------------------------------------------------------------------
 async function readArchive() {
+  if (!DATA_FILE) {
+    return { files: [], tags: [] };
+  }
   let text;
   try {
     text = await fsp.readFile(DATA_FILE, 'utf8');
@@ -100,6 +132,7 @@ async function writeArchiveTo(file, data) {
 }
 
 async function writeArchive(data) {
+  if (!DATA_FILE) throw new Error('Journal data file is not configured');
   return writeArchiveTo(DATA_FILE, data);
 }
 
@@ -126,23 +159,10 @@ async function writeSettings(settings) {
 
 // ---------------------------------------------------------------------
 // Git-ignored environment file
-// The watchdog sources .env before starting Node. The application keeps
-// .env up to date so the next restart sees a valid configuration.
+// The server reads .env itself at startup. .env is only written by the
+// setup endpoints, so its presence (and completeness) is the signal that
+// the user has configured the app.
 // ---------------------------------------------------------------------
-function parseEnv(text) {
-  const env = {};
-  for (const line of text.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const idx = trimmed.indexOf('=');
-    if (idx === -1) continue;
-    const key = trimmed.slice(0, idx).trim();
-    const value = trimmed.slice(idx + 1).trim();
-    env[key] = value;
-  }
-  return env;
-}
-
 async function readEnv() {
   try {
     const text = await fsp.readFile(ENV_FILE, 'utf8');
@@ -643,16 +663,19 @@ const server = http.createServer(async (req, res) => {
     // GET /api/notes — free-form markdown notes (stored next to data.json)
     if (req.method === 'GET' && pathname === '/api/notes') {
       let text = '';
-      try {
-        text = await fsp.readFile(NOTES_FILE, 'utf8');
-      } catch (err) {
-        if (err.code !== 'ENOENT') throw err;
+      if (NOTES_FILE) {
+        try {
+          text = await fsp.readFile(NOTES_FILE, 'utf8');
+        } catch (err) {
+          if (err.code !== 'ENOENT') throw err;
+        }
       }
       return sendJson(res, 200, { notes: text });
     }
 
     // POST /api/notes — save free-form markdown notes
     if (req.method === 'POST' && pathname === '/api/notes') {
+      if (!NOTES_FILE) return sendJson(res, 500, { error: 'Journal data file is not configured' });
       const body = await readBody(req);
       const text = typeof body.notes === 'string' ? body.notes : '';
       const tmp = NOTES_FILE + '.tmp';
@@ -876,8 +899,12 @@ async function startServer() {
   const count = await rescanImages();
   server.listen(PORT, () => {
     console.log(`Archive Viewer running at http://localhost:${PORT}`);
-    console.log(`  data file:   ${DATA_FILE}`);
-    console.log(`  images dir:  ${IMAGES_DIR}  (${count} PNGs found)`);
+    if (isConfigured) {
+      console.log(`  data file:   ${DATA_FILE}`);
+      console.log(`  images dir:  ${IMAGES_DIR}  (${count} PNGs found)`);
+    } else {
+      console.log('  unconfigured: waiting for first-run setup');
+    }
   });
 }
 
