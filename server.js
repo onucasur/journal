@@ -18,7 +18,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const { URL } = require('url');
-const { exec, spawn } = require('child_process');
+const { exec } = require('child_process');
 const util = require('util');
 
 const execAsync = util.promisify(exec);
@@ -29,6 +29,8 @@ const NOTES_FILE = path.join(path.dirname(DATA_FILE), 'notes.md');
 const IMAGES_DIR = path.resolve(process.env.IMAGES_DIR || path.join(__dirname, 'images'));
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const SETTINGS_FILE = path.join(__dirname, 'settings.json');
+const ENV_FILE = path.join(__dirname, '.env');
+const RESTART_MARKER = path.join(__dirname, '.restart-marker');
 
 // ---------------------------------------------------------------------
 // In-memory index of filename -> absolute path, built by scanning
@@ -108,6 +110,65 @@ async function writeSettings(settings) {
 }
 
 // ---------------------------------------------------------------------
+// Git-ignored environment file
+// The watchdog sources .env before starting Node. The application keeps
+// .env up to date so the next restart sees a valid configuration.
+// ---------------------------------------------------------------------
+function parseEnv(text) {
+  const env = {};
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const idx = trimmed.indexOf('=');
+    if (idx === -1) continue;
+    const key = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim();
+    env[key] = value;
+  }
+  return env;
+}
+
+async function ensureEnvFile() {
+  const defaultDataFile = path.join(__dirname, 'data.json');
+  const defaultImagesDir = path.join(__dirname, 'images');
+
+  let needsWrite = false;
+  let dataFile = defaultDataFile;
+  let imagesDir = defaultImagesDir;
+  let port = '3000';
+
+  try {
+    const text = await fsp.readFile(ENV_FILE, 'utf8');
+    const env = parseEnv(text);
+    if (!env.DATA_FILE || !env.IMAGES_DIR) {
+      needsWrite = true;
+      if (env.DATA_FILE) dataFile = env.DATA_FILE;
+      if (env.IMAGES_DIR) imagesDir = env.IMAGES_DIR;
+      if (env.PORT) port = env.PORT;
+    }
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      needsWrite = true;
+    } else {
+      throw err;
+    }
+  }
+
+  if (needsWrite) {
+    const content = [
+      '# Journal viewer runtime configuration.',
+      '# This file is git-ignored; edit it to point to your actual journal data.',
+      `DATA_FILE=${dataFile}`,
+      `IMAGES_DIR=${imagesDir}`,
+      `PORT=${port}`,
+      ''
+    ].join('\n');
+    await fsp.writeFile(ENV_FILE, content, 'utf8');
+    console.log(`[env] Wrote defaults to ${ENV_FILE}`);
+  }
+}
+
+// ---------------------------------------------------------------------
 // Git helpers for checking / pulling application updates
 // ---------------------------------------------------------------------
 async function gitFetch() {
@@ -180,8 +241,7 @@ async function applyAutoUpdate() {
       const pull = await gitPull();
       console.log('Pulled update.' + (pull.output ? '\n' + pull.output : ''));
       console.log('Restarting server to run the update...');
-      restartServerProcess();
-      process.exit(0);
+      await requestRestart('auto-update');
     } else {
       console.log('No application update available.');
     }
@@ -190,14 +250,10 @@ async function applyAutoUpdate() {
   }
 }
 
-function restartServerProcess() {
-  const child = spawn(process.argv[0], process.argv.slice(1), {
-    detached: true,
-    stdio: 'ignore',
-    cwd: process.cwd(),
-    env: process.env
-  });
-  child.unref();
+async function requestRestart(reason) {
+  await fsp.writeFile(RESTART_MARKER, reason + '\n', 'utf8');
+  console.log(`[restart] Marker written (${reason}); exiting for watchdog restart...`);
+  process.exit(0);
 }
 
 // ---------------------------------------------------------------------
@@ -348,10 +404,9 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, { updated: false, message: 'Already up to date', ...status });
         }
         const pull = await gitPull();
-        restartServerProcess();
-        sendJson(res, 200, { updated: true, message: 'Updated and restarting server.', output: pull.output });
-        // Allow the response to flush before exiting.
-        setTimeout(() => process.exit(0), 200);
+        sendJson(res, 200, { updated: true, message: 'Updated; restarting...', output: pull.output });
+        // Allow the response to flush before telling the watchdog to restart us.
+        setTimeout(() => requestRestart('update'), 200);
         return;
       } catch (err) {
         return sendJson(res, 500, { error: err.message });
@@ -731,6 +786,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 async function startServer() {
+  await ensureEnvFile();
   await applyAutoUpdate();
   const count = await rescanImages();
   server.listen(PORT, () => {

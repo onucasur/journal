@@ -1,0 +1,14 @@
+# Runtime configuration and marker files
+.env
+.restart-marker
+
+# Server-side application settings (per-machine)
+settings.json
+
+# Editor / IDE
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
