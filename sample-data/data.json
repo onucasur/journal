@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "files": [
+    {
+      "files": ["sample-01.png", "sample-02.png", "sample-03.png"],
+      "tags": ["sample", "tag-a"],
+      "youtubes": ["https://youtu.be/sample-a"],
+      "news": "news-sample-01.png"
+    },
+    {
+      "files": ["sample-04.png", "sample-05.png", "sample-06.png"],
+      "tags": ["sample", "tag-b"],
+      "youtubes": ["https://youtu.be/sample-b"],
+      "news": "news-sample-02.png"
+    }
+  ]
+}

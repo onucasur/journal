@@ -445,6 +445,33 @@
   .custom-lookback{display:flex;align-items:center;gap:6px;color:var(--text-dim);font-size:0.8rem;}
 
   .settings-footer{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:14px 20px;border-top:1px solid var(--line);}
+
+  .setup-panel{
+    width:min(560px, calc(100vw - 40px));background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    box-shadow:0 16px 48px rgba(0,0,0,0.5);display:flex;flex-direction:column;max-height:calc(100vh - 40px);
+  }
+  .setup-body{padding:24px 26px;display:flex;flex-direction:column;gap:22px;overflow:auto;}
+  .setup-body h2{margin:0;font-family:var(--serif);font-size:1.35rem;font-weight:400;color:var(--text);}
+  .setup-body p{margin:0;color:var(--text-dim);font-size:0.85rem;line-height:1.45;}
+  .setup-options{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .setup-option{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:18px;
+    display:flex;flex-direction:column;gap:12px;
+  }
+  .setup-option h3{margin:0;font-size:0.95rem;font-weight:600;color:var(--text);}
+  .setup-option p{font-size:0.8rem;}
+  .setup-option label{font-size:0.78rem;color:var(--text-dim);display:flex;flex-direction:column;gap:4px;}
+  .setup-option input[type="text"]{
+    background:var(--panel);border:1px solid var(--line);border-radius:4px;color:var(--text);
+    padding:7px 10px;font-family:var(--mono);font-size:0.8rem;
+  }
+  .setup-option input[type="text"]:focus{outline:none;border-color:var(--accent);}
+  .setup-option .apply-btn{align-self:flex-start;margin-top:4px;}
+  .setup-status{font-family:var(--mono);font-size:0.75rem;color:var(--accent);min-height:1.2em;}
+  @media (max-width:560px){
+    .setup-options{grid-template-columns:1fr;}
+  }
+
   .apply-btn{
     background:var(--accent);color:#1a1305;border:none;padding:8px 18px;border-radius:3px;
     font-family:var(--sans);font-size:0.85rem;font-weight:600;cursor:pointer;transition:opacity .15s;
@@ -621,6 +648,39 @@
         <button id="closeAddPanel" aria-label="Close">&#10005;</button>
       </div>
       <div class="add-image-grid" id="addImageGrid"></div>
+    </div>
+  </div>
+
+  <div id="setupDialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center;">
+    <div class="setup-panel">
+      <div class="setup-body">
+        <h2>Welcome to Journal Archive Viewer</h2>
+        <p>No journal data is configured yet. Choose how you want to get started.</p>
+        <div class="setup-options">
+          <div class="setup-option">
+            <h3>Use your own data</h3>
+            <p>Provide the path to your journal data file and the folder that contains your images.</p>
+            <label>
+              Data file path
+              <input type="text" id="setupDataFile" placeholder="/path/to/data.json">
+            </label>
+            <label>
+              Images directory
+              <input type="text" id="setupImagesDir" placeholder="/path/to/images">
+            </label>
+            <button id="setupCustomBtn" class="apply-btn">Use these paths</button>
+          </div>
+          <div class="setup-option">
+            <h3>Try sample data</h3>
+            <p>Load the bundled sample journal with two groups, sample tags, and sample images.</p>
+            <button id="setupSampleBtn" class="apply-btn">Load sample data</button>
+          </div>
+        </div>
+        <span id="setupStatus" class="setup-status"></span>
+        <p style="font-size:0.75rem;color:var(--text-dim);">
+          The selected paths are saved to a git-ignored <code>.env</code> file and the server restarts automatically.
+        </p>
+      </div>
     </div>
   </div>
 
@@ -919,6 +979,85 @@
       }
     }finally{
       if(btn) btn.disabled = false;
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // First-run setup
+  // ---------------------------------------------------------------------
+  const setupDialog = document.getElementById('setupDialog');
+  const setupDataFileInput = document.getElementById('setupDataFile');
+  const setupImagesDirInput = document.getElementById('setupImagesDir');
+  const setupCustomBtn = document.getElementById('setupCustomBtn');
+  const setupSampleBtn = document.getElementById('setupSampleBtn');
+  const setupStatus = document.getElementById('setupStatus');
+
+  function showSetupDialog(){
+    if(setupDialog) setupDialog.style.display = 'flex';
+  }
+
+  function hideSetupDialog(){
+    if(setupDialog) setupDialog.style.display = 'none';
+  }
+
+  function setSetupStatus(text, isError){
+    if(!setupStatus) return;
+    setupStatus.textContent = text;
+    setupStatus.style.color = isError ? 'var(--danger)' : 'var(--accent)';
+  }
+
+  async function setupSample(){
+    if(!setupSampleBtn) return;
+    setupSampleBtn.disabled = true;
+    setSetupStatus('Loading sample data and restarting...');
+    try{
+      const res = await fetch('/api/setup/sample', { method: 'POST' });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      setSetupStatus(data.message + ' Please wait, then refresh the page.');
+    }catch(err){
+      setSetupStatus('Failed: ' + err.message, true);
+      setupSampleBtn.disabled = false;
+    }
+  }
+
+  async function setupCustom(){
+    if(!setupCustomBtn) return;
+    const dataFile = (setupDataFileInput.value || '').trim();
+    const imagesDir = (setupImagesDirInput.value || '').trim();
+    if(!dataFile || !imagesDir){
+      setSetupStatus('Both paths are required.', true);
+      return;
+    }
+    setupCustomBtn.disabled = true;
+    setSetupStatus('Saving paths and restarting...');
+    try{
+      const res = await fetch('/api/setup/custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataFile, imagesDir })
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      setSetupStatus(data.message + ' Please wait, then refresh the page.');
+    }catch(err){
+      setSetupStatus('Failed: ' + err.message, true);
+      setupCustomBtn.disabled = false;
+    }
+  }
+
+  if(setupSampleBtn) setupSampleBtn.addEventListener('click', setupSample);
+  if(setupCustomBtn) setupCustomBtn.addEventListener('click', setupCustom);
+
+  async function checkSetupStatus(){
+    try{
+      const res = await fetch('/api/setup/status');
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      return !!data.configured;
+    }catch(err){
+      console.error('Could not check setup status:', err);
+      return false;
     }
   }
 
@@ -2546,8 +2685,15 @@
   applySettings();
   loadServerSettings();
   setNotesMode('preview');
-  loadArchive();
-  fetchAllImages();
+  (async function init(){
+    const configured = await checkSetupStatus();
+    if(configured){
+      loadArchive();
+      fetchAllImages();
+    } else {
+      showSetupDialog();
+    }
+  })();
 })();
 </script>
 </body>

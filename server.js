@@ -31,6 +31,8 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const SETTINGS_FILE = path.join(__dirname, 'settings.json');
 const ENV_FILE = path.join(__dirname, '.env');
 const RESTART_MARKER = path.join(__dirname, '.restart-marker');
+const SAMPLE_DATA_FILE = path.join(__dirname, 'sample-data', 'data.json');
+const SAMPLE_IMAGES_DIR = path.join(__dirname, 'sample-data', 'images');
 
 // ---------------------------------------------------------------------
 // In-memory index of filename -> absolute path, built by scanning
@@ -68,7 +70,16 @@ async function rescanImages() {
 // data.json read/write helpers
 // ---------------------------------------------------------------------
 async function readArchive() {
-  const text = await fsp.readFile(DATA_FILE, 'utf8');
+  let text;
+  try {
+    text = await fsp.readFile(DATA_FILE, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      // Empty startup state: no data file configured yet.
+      return { files: [], tags: [] };
+    }
+    throw err;
+  }
   const parsed = JSON.parse(text);
   if (!parsed.files || !Array.isArray(parsed.files)) {
     throw new Error("data.json is missing a top-level 'files' array");
@@ -82,10 +93,14 @@ async function readArchive() {
   return parsed;
 }
 
-async function writeArchive(data) {
-  const tmp = DATA_FILE + '.tmp';
+async function writeArchiveTo(file, data) {
+  const tmp = file + '.tmp';
   await fsp.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-  await fsp.rename(tmp, DATA_FILE);
+  await fsp.rename(tmp, file);
+}
+
+async function writeArchive(data) {
+  return writeArchiveTo(DATA_FILE, data);
 }
 
 // ---------------------------------------------------------------------
@@ -128,44 +143,95 @@ function parseEnv(text) {
   return env;
 }
 
-async function ensureEnvFile() {
-  const defaultDataFile = path.join(__dirname, 'data.json');
-  const defaultImagesDir = path.join(__dirname, 'images');
-
-  let needsWrite = false;
-  let dataFile = defaultDataFile;
-  let imagesDir = defaultImagesDir;
-  let port = '3000';
-
+async function readEnv() {
   try {
     const text = await fsp.readFile(ENV_FILE, 'utf8');
-    const env = parseEnv(text);
-    if (!env.DATA_FILE || !env.IMAGES_DIR) {
-      needsWrite = true;
-      if (env.DATA_FILE) dataFile = env.DATA_FILE;
-      if (env.IMAGES_DIR) imagesDir = env.IMAGES_DIR;
-      if (env.PORT) port = env.PORT;
-    }
+    return parseEnv(text);
   } catch (err) {
-    if (err.code === 'ENOENT') {
-      needsWrite = true;
-    } else {
-      throw err;
-    }
+    if (err.code === 'ENOENT') return {};
+    throw err;
   }
+}
 
-  if (needsWrite) {
-    const content = [
-      '# Journal viewer runtime configuration.',
-      '# This file is git-ignored; edit it to point to your actual journal data.',
-      `DATA_FILE=${dataFile}`,
-      `IMAGES_DIR=${imagesDir}`,
-      `PORT=${port}`,
-      ''
-    ].join('\n');
-    await fsp.writeFile(ENV_FILE, content, 'utf8');
+async function writeEnv(env) {
+  const defaultDataFile = path.join(__dirname, 'data.json');
+  const defaultImagesDir = path.join(__dirname, 'images');
+  const content = [
+    '# Journal viewer runtime configuration.',
+    '# This file is git-ignored; edit it to point to your actual journal data.',
+    `DATA_FILE=${env.DATA_FILE || defaultDataFile}`,
+    `IMAGES_DIR=${env.IMAGES_DIR || defaultImagesDir}`,
+    `PORT=${env.PORT || '3000'}`,
+    `APP_CONFIGURED=${env.APP_CONFIGURED === 'true' ? 'true' : 'false'}`,
+    ''
+  ].join('\n');
+  await fsp.writeFile(ENV_FILE, content, 'utf8');
+}
+
+async function ensureEnvFile() {
+  const env = await readEnv();
+  if (!env.DATA_FILE || !env.IMAGES_DIR) {
+    await writeEnv(env);
     console.log(`[env] Wrote defaults to ${ENV_FILE}`);
   }
+}
+
+// ---------------------------------------------------------------------
+// Setup helpers
+// ---------------------------------------------------------------------
+async function fileExists(file) {
+  try {
+    const stat = await fsp.stat(file);
+    return stat.isFile();
+  } catch (err) {
+    if (err.code === 'ENOENT') return false;
+    throw err;
+  }
+}
+
+async function dirExists(dir) {
+  try {
+    const stat = await fsp.stat(dir);
+    return stat.isDirectory();
+  } catch (err) {
+    if (err.code === 'ENOENT') return false;
+    throw err;
+  }
+}
+
+async function setupSampleData() {
+  if (!await fileExists(SAMPLE_DATA_FILE)) {
+    throw new Error('Sample data is not available');
+  }
+  if (!await dirExists(SAMPLE_IMAGES_DIR)) {
+    throw new Error('Sample images are not available');
+  }
+  const env = await readEnv();
+  env.DATA_FILE = SAMPLE_DATA_FILE;
+  env.IMAGES_DIR = SAMPLE_IMAGES_DIR;
+  env.APP_CONFIGURED = 'true';
+  await writeEnv(env);
+}
+
+async function setupCustomData(dataFile, imagesDir) {
+  if (!dataFile || !imagesDir) {
+    throw new Error('Both data file and images directory are required');
+  }
+  const resolvedDataFile = path.resolve(dataFile);
+  const resolvedImagesDir = path.resolve(imagesDir);
+
+  await fsp.mkdir(path.dirname(resolvedDataFile), { recursive: true });
+  await fsp.mkdir(resolvedImagesDir, { recursive: true });
+
+  if (!await fileExists(resolvedDataFile)) {
+    await writeArchiveTo(resolvedDataFile, { files: [], tags: [] });
+  }
+
+  const env = await readEnv();
+  env.DATA_FILE = resolvedDataFile;
+  env.IMAGES_DIR = resolvedImagesDir;
+  env.APP_CONFIGURED = 'true';
+  await writeEnv(env);
 }
 
 // ---------------------------------------------------------------------
@@ -366,6 +432,37 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && pathname === '/api/data') {
       const data = await readArchive();
       return sendJson(res, 200, data);
+    }
+
+    // GET /api/setup/status — whether the app has been configured with data paths
+    if (req.method === 'GET' && pathname === '/api/setup/status') {
+      const env = await readEnv();
+      return sendJson(res, 200, { configured: env.APP_CONFIGURED === 'true' });
+    }
+
+    // POST /api/setup/sample — configure to use bundled sample data
+    if (req.method === 'POST' && pathname === '/api/setup/sample') {
+      try {
+        await setupSampleData();
+        sendJson(res, 200, { configured: true, message: 'Configured sample data; restarting...' });
+        setTimeout(() => requestRestart('setup-sample'), 200);
+        return;
+      } catch (err) {
+        return sendJson(res, 500, { error: err.message });
+      }
+    }
+
+    // POST /api/setup/custom — configure to use user-provided data paths
+    if (req.method === 'POST' && pathname === '/api/setup/custom') {
+      try {
+        const body = await readBody(req);
+        await setupCustomData(body.dataFile, body.imagesDir);
+        sendJson(res, 200, { configured: true, message: 'Configured custom paths; restarting...' });
+        setTimeout(() => requestRestart('setup-custom'), 200);
+        return;
+      } catch (err) {
+        return sendJson(res, 500, { error: err.message });
+      }
     }
 
     // GET /api/settings — server-side application settings
