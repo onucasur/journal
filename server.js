@@ -162,18 +162,9 @@ async function writeEnv(env) {
     `DATA_FILE=${env.DATA_FILE || defaultDataFile}`,
     `IMAGES_DIR=${env.IMAGES_DIR || defaultImagesDir}`,
     `PORT=${env.PORT || '3000'}`,
-    `APP_CONFIGURED=${env.APP_CONFIGURED === 'true' ? 'true' : 'false'}`,
     ''
   ].join('\n');
   await fsp.writeFile(ENV_FILE, content, 'utf8');
-}
-
-async function ensureEnvFile() {
-  const env = await readEnv();
-  if (!env.DATA_FILE || !env.IMAGES_DIR) {
-    await writeEnv(env);
-    console.log(`[env] Wrote defaults to ${ENV_FILE}`);
-  }
 }
 
 // ---------------------------------------------------------------------
@@ -209,7 +200,6 @@ async function setupSampleData() {
   const env = await readEnv();
   env.DATA_FILE = SAMPLE_DATA_FILE;
   env.IMAGES_DIR = SAMPLE_IMAGES_DIR;
-  env.APP_CONFIGURED = 'true';
   await writeEnv(env);
 }
 
@@ -230,7 +220,6 @@ async function setupCustomData(dataFile, imagesDir) {
   const env = await readEnv();
   env.DATA_FILE = resolvedDataFile;
   env.IMAGES_DIR = resolvedImagesDir;
-  env.APP_CONFIGURED = 'true';
   await writeEnv(env);
 }
 
@@ -437,7 +426,7 @@ const server = http.createServer(async (req, res) => {
     // GET /api/setup/status — whether the app has been configured with data paths
     if (req.method === 'GET' && pathname === '/api/setup/status') {
       const env = await readEnv();
-      return sendJson(res, 200, { configured: env.APP_CONFIGURED === 'true' });
+      return sendJson(res, 200, { configured: !!(env.DATA_FILE && env.IMAGES_DIR) });
     }
 
     // POST /api/setup/sample — configure to use bundled sample data
@@ -883,7 +872,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 async function startServer() {
-  await ensureEnvFile();
   await applyAutoUpdate();
   const count = await rescanImages();
   server.listen(PORT, () => {
